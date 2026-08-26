@@ -3,6 +3,7 @@ import { Car } from "../interfaces/Car";
 export const cars: Car[] = [
   {
     id: 1,
+    imageUrl: "/208.png",
     brand: "Peugeot",
     model: "208",
     year: 2022,
@@ -17,6 +18,7 @@ export const cars: Car[] = [
   },
   {
     id: 2,
+    imageUrl: "/fiat-cronos.png",
     brand: "Fiat",
     model: "Cronos",
     year: 2023,
@@ -31,6 +33,7 @@ export const cars: Car[] = [
   },
   {
     id: 3,
+    imageUrl: "/onix-plus.png",
     brand: "Chevrolet",
     model: "Onix Plus",
     year: 2022,
@@ -45,6 +48,7 @@ export const cars: Car[] = [
   },
   {
     id: 4,
+    imageUrl: "/corolla.webp",
     brand: "Toyota",
     model: "Corolla",
     year: 2023,
@@ -59,6 +63,7 @@ export const cars: Car[] = [
   },
   {
     id: 5,
+    
     brand: "Volkswagen",
     model: "Vento",
     year: 2021,
@@ -73,6 +78,7 @@ export const cars: Car[] = [
   },
   {
     id: 6,
+    imageUrl: "/t-cross.png",
     brand: "Volkswagen",
     model: "T-Cross",
     year: 2023,
@@ -87,6 +93,7 @@ export const cars: Car[] = [
   },
   {
     id: 7,
+    imageUrl: "/corolla-cross.png",
     brand: "Toyota",
     model: "Corolla Cross",
     year: 2024,
@@ -101,6 +108,7 @@ export const cars: Car[] = [
   },
   {
     id: 8,
+    imageUrl: "/ford-territory.png",
     brand: "Ford",
     model: "Territory",
     year: 2022,
@@ -115,6 +123,7 @@ export const cars: Car[] = [
   },
   {
     id: 9,
+    imageUrl: "/jeep-compass.png",
     brand: "Jeep",
     model: "Compass",
     year: 2023,
@@ -129,6 +138,7 @@ export const cars: Car[] = [
   },
   {
     id: 10,
+    imageUrl: "/audi-q5.png",
     brand: "Audi",
     model: "Q5",
     year: 2023,
@@ -143,6 +153,7 @@ export const cars: Car[] = [
   },
   {
     id: 11,
+    imageUrl: "/bmw_320i.png",
     brand: "BMW",
     model: "320i",
     year: 2023,
@@ -157,6 +168,7 @@ export const cars: Car[] = [
   },
   {
     id: 12,
+    imageUrl: "/chevrolet-spin.avif",
     brand: "Chevrolet",
     model: "Spin",
     year: 2021,
@@ -171,6 +183,7 @@ export const cars: Car[] = [
   },
   {
     id: 13,
+    imageUrl: "/citroen-berlingo.png",
     brand: "Citroën",
     model: "Berlingo",
     year: 2022,
@@ -185,6 +198,7 @@ export const cars: Car[] = [
   },
   {
     id: 14,
+    imageUrl: "/peugeot-308-sw.avif",
     brand: "Peugeot",
     model: "308 SW",
     year: 2023,

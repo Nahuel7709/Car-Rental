@@ -2,6 +2,7 @@ import { VehicleType, Category, Gearbox } from "../types/CarTypes";
 
 export interface Car {
   id: number;
+  imageUrl?: string;
   brand: string;
   model: string;
   year: number;
