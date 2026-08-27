@@ -17,10 +17,18 @@ export const CarCard = ({ car }: CarCardProps) => {
         {car.vehicleType} {car.category} {car.gearbox}
       </p>
       <ul className="flex flex-wrap gap-2">
-        <Badge>{car.seats} seats</Badge>
-        <Badge>{car.bagCapacity} bags</Badge>
-        <Badge>{car.suitcaseCapacity} suitcases</Badge>
-        <Badge>+{car.ageRequired} years</Badge>
+        <li>
+          <Badge>{car.seats} seats</Badge>
+        </li>
+        <li>
+          <Badge>{car.bagCapacity} bags</Badge>
+        </li>
+        <li>
+          <Badge>{car.suitcaseCapacity} suitcases</Badge>
+        </li>
+        <li>
+          <Badge>+{car.ageRequired} years</Badge>
+        </li>
       </ul>
       {car.imageUrl ? (
         <img

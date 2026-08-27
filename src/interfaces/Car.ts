@@ -1,4 +1,6 @@
-import { VehicleType, Category, Gearbox } from "../types/CarTypes";
+export type Gearbox = "Manual" | "Automatic";
+export type VehicleType = "Sedan" | "SUV" | "Family car" | "Station wagon";
+export type Category = "Economy" | "Premium" | "Luxury";
 
 export interface Car {
   id: number;
