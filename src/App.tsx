@@ -1,10 +1,11 @@
 import { CarList } from "./components/CarList";
 import { Layout } from "./components/Layout";
+import { cars } from "./data/cars";
 
 function App() {
   return (
     <Layout>
-      <CarList />
+      <CarList cars={cars}/>
     </Layout>
   );
 }

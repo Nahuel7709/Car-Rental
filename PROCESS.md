@@ -2,6 +2,9 @@ Car rental — process of thought
 
 Inspiration website I used as a guide: https://www.sixt.com/
 
+
+# 01-Challenge
+
 - First of all I created a project with npm create vite and selected React +
   TypeScript + SWC.
 - I cleaned the boilerplate code and files, leaving only App.tsx and main.tsx.
@@ -46,3 +49,22 @@ quite a bit on AI so as not to lose too much time there. I also used AI to
 explain concepts I didn't understand well, like props, and to review my code and
 point out my mistakes. It generated the mock car data and most of the Tailwind
 classes. The component structure, the types and the decisions are mine.
+
+
+### DECISION about CarList importing the mock cars directly:
+It makes more sense for a purely presentational component like
+CarList not to handle getting the data, and to receive it from its parent
+instead, without knowing where it came from.
+
+If the data comes from an API later, CarList would receive it the same way,
+through the same prop, without changing anything inside it. The only thing
+that changes is how App obtains the data.
+
+I put that responsibility in App because it's the root of the application:
+the place where everything is assembled. The components at the edges display,
+the root knows where things come from.
+
+There is a second benefit. If several components need the same data, doing the
+import or the API call inside each one would mean repeating the same request in
+several places, with the risk of them showing different things. Doing it once
+at the top and passing it down as props keeps a single source of truth.
