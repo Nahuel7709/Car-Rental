@@ -2,6 +2,9 @@ export type Gearbox = "Manual" | "Automatic";
 export type VehicleType = "Sedan" | "SUV" | "Family car" | "Station wagon";
 export type Category = "Economy" | "Premium" | "Luxury";
 
+export type VehicleTypeFilter = VehicleType | "All";
+export type CategoryFilter = Category | "All";
+
 export interface Car {
   id: number;
   imageUrl?: string;

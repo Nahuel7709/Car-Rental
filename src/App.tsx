@@ -1,11 +1,11 @@
-import { CarList } from "./components/CarList";
 import { Layout } from "./components/Layout";
 import { cars } from "./data/cars";
+import { CarsPage } from "./pages/CarsPage";
 
 function App() {
   return (
     <Layout>
-      <CarList cars={cars}/>
+      <CarsPage cars={cars} />
     </Layout>
   );
 }

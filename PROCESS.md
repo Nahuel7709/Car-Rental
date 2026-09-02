@@ -2,7 +2,6 @@ Car rental — process of thought
 
 Inspiration website I used as a guide: https://www.sixt.com/
 
-
 # 01-Challenge
 
 - First of all I created a project with npm create vite and selected React +
@@ -50,8 +49,8 @@ explain concepts I didn't understand well, like props, and to review my code and
 point out my mistakes. It generated the mock car data and most of the Tailwind
 classes. The component structure, the types and the decisions are mine.
 
-
 ### DECISION about CarList importing the mock cars directly:
+
 It makes more sense for a purely presentational component like
 CarList not to handle getting the data, and to receive it from its parent
 instead, without knowing where it came from.
@@ -68,3 +67,67 @@ There is a second benefit. If several components need the same data, doing the
 import or the API call inside each one would mean repeating the same request in
 several places, with the risk of them showing different things. Doing it once
 at the top and passing it down as props keeps a single source of truth.
+
+# 02-Challenge
+
+Before starting challenge 2, I first reviewed useState and practised it with a
+few exercises to get it fresh again. After that I spent a lot of time practising
+how to capture inputs and use them with state (this is where I studied the most).
+
+Now, how the challenge went:
+
+I decided to start with the search bar, so I began by adding a text input with a
+"Search" placeholder. I created the `search` state, where I'm going to store
+whatever the user types in the search bar, capturing it in the input through an
+`onChange` and saving the value with `setSearch` (the state I created). I tested
+that it worked by creating a paragraph with the content of `search`, to see if
+that paragraph changed with what I was typing in the search bar. For now I
+didn't create a separate component for this search/filters section, I'll do that
+once it works.
+
+![alt text](image.png)
+
+With what the user types now captured in state, I can filter the cars that are
+displayed based on that state. But I already know I'm going to have more than one
+filtering condition, so I decided to create a `filteredCars` constant, and inside
+it several constants, one for each filtering condition. I started with
+`searchFilter`, which is the one for the search bar and filters by whether the
+car's brand or model contains what the user typed. I return `searchFilter`, which
+for now is my only condition, and the map that renders one CarCard per car now
+runs over `filteredCars` instead of `cars`.
+![alt text](image-1.png)![alt text](image-2.png)![alt text](image-3.png)
+
+As the next filter I created a button that works as a toggle, so I can filter the
+cars by whether they're automatic or not. So I created another state to hold
+whether that button is true or false. Then, inside `filteredCars`, I created a new
+constant `automaticFilter` where I filter each car by either of these options: if
+the value of `onlyAutomatic` is false (`!onlyAutomatic`), or if the car is
+automatic (`car.gearbox === "Automatic"`). I return that constant together with
+`searchFilter`.
+![alt text](image-4.png)![alt text](image-5.png)![alt text](image-6.png)
+
+The next filter I created was the vehicle type one. I created a select with 5
+options: one for all of them, and then one per car type. I created a state to
+handle which filter is selected, which is "All" by default. Then I use that state
+to filter car by car: if the state is "All" it lets every car through, otherwise
+it checks whether the car's type is equal to the state of the select. I also
+created a new type, which is `VehicleType` plus the "All" option added through a
+union type, so I could type the select's state correctly.
+![alt text](image-7.png)![alt text](image-8.png)![alt text](image-9.png)![alt text](image-10.png)
+
+Then I did the same thing with the categories — luxury, economy, premium in a
+select.
+![alt text](image-11.png)
+
+I added the conditional to render either the grid of cars or the message saying
+none were found.
+![alt text](image-12.png)
+
+I created a `pages` folder with `CarsPage`, which owns the filter state and computes the filtered list, and a new `CarFilters` component with the controls.
+The reason the state ended up in the page is structural. Once I pulled the controls out of `CarList` into their own component, `CarFilters` and `CarList`
+became siblings, and both need the same values: the filters to display what the
+user selected, and the list to show the result of filtering. In React data only
+flows down, so two siblings can't share a value between them it has to live in
+their closest common parent. That's the page.
+
+Styles remaining.
