@@ -130,4 +130,4 @@ user selected, and the list to show the result of filtering. In React data only
 flows down, so two siblings can't share a value between them it has to live in
 their closest common parent. That's the page.
 
-Styles remaining.
+Applied styles and change de "All" option in both select to "All categories" and "All types" to describe better what each select does.

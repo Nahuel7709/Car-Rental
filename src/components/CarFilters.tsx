@@ -6,9 +6,9 @@ type CarFiltersProps = {
   onlyAutomatic: boolean;
   onToggleAutomatic: () => void;
   vehicleTypeSelect: VehicleTypeFilter;
-  onVehicleTypeSelect: (value: VehicleTypeFilter) => void;
+  onVehicleTypeChange: (value: VehicleTypeFilter) => void;
   category: CategoryFilter;
-  onCategory: (value: CategoryFilter) => void;
+  onCategoryChange: (value: CategoryFilter) => void;
 };
 
 export const CarFilters = ({
@@ -17,20 +17,25 @@ export const CarFilters = ({
   onlyAutomatic,
   onToggleAutomatic,
   vehicleTypeSelect,
-  onVehicleTypeSelect,
+  onVehicleTypeChange,
   category,
-  onCategory,
+  onCategoryChange,
 }: CarFiltersProps) => {
   return (
-    <div className="m-5">
+    <div className="mb-8 flex flex-wrap items-center gap-3">
       <input
+        className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm"
         type="text"
         placeholder="Search"
         value={search}
         onChange={(e) => onSearchChange(e.target.value)}
       />
       <button
-        className={onlyAutomatic ? "bg-amber-500" : "bg-blue-50"}
+        className={`rounded-full border px-4 py-2 text-sm cursor-pointer ${
+          onlyAutomatic
+            ? "border-emerald-600 bg-emerald-600 text-white"
+            : "border-gray-300 bg-white text-gray-700"
+        }`}
         onClick={onToggleAutomatic}
         type="button"
         aria-pressed={onlyAutomatic}
@@ -38,24 +43,26 @@ export const CarFilters = ({
         Automatic
       </button>
       <select
+        className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm"
         value={vehicleTypeSelect}
-        name="VehicleType"
         onChange={(e) =>
-          onVehicleTypeSelect(e.target.value as VehicleTypeFilter)
+          onVehicleTypeChange(e.target.value as VehicleTypeFilter)
         }
+        aria-label="Vehicle type"
       >
-        <option value="All">All</option>
+        <option value="All">All Types</option>
         <option value="Sedan">Sedan</option>
         <option value="SUV">SUV</option>
         <option value="Family car">Family car</option>
         <option value="Station wagon">Station wagon</option>
       </select>
       <select
+        className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm"
         value={category}
-        name="category"
-        onChange={(e) => onCategory(e.target.value as CategoryFilter)}
+        onChange={(e) => onCategoryChange(e.target.value as CategoryFilter)}
+        aria-label="Categories"
       >
-        <option value="All">All</option>
+        <option value="All">All Categories</option>
         <option value="Economy">Economy</option>
         <option value="Premium">Premium</option>
         <option value="Luxury">Luxury</option>

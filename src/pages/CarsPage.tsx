@@ -14,10 +14,12 @@ export const CarsPage = ({ cars }: CarsPageProps) => {
     useState<VehicleTypeFilter>("All");
   const [category, setCategory] = useState<CategoryFilter>("All");
 
+  const searchTerm = search.toLowerCase().trim();
+
   const filteredCars = cars.filter((car) => {
     const searchFilter =
-      car.brand.toLowerCase().includes(search.toLowerCase()) ||
-      car.model.toLowerCase().includes(search.toLowerCase());
+      car.brand.toLowerCase().includes(searchTerm) ||
+      car.model.toLowerCase().includes(searchTerm);
 
     const automaticFilter = !onlyAutomatic || car.gearbox === "Automatic";
 
@@ -39,9 +41,9 @@ export const CarsPage = ({ cars }: CarsPageProps) => {
         onlyAutomatic={onlyAutomatic}
         onToggleAutomatic={() => setOnlyAutomatic((prev) => !prev)}
         vehicleTypeSelect={vehicleTypeSelect}
-        onVehicleTypeSelect={setVehicleTypeSelect}
+        onVehicleTypeChange={setVehicleTypeSelect}
         category={category}
-        onCategory={setCategory}
+        onCategoryChange={setCategory}
       />
       <CarList cars={filteredCars} />
     </div>
