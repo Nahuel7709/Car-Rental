@@ -10,6 +10,7 @@ type CarFiltersProps = {
   category: CategoryFilter;
   onCategoryChange: (value: CategoryFilter) => void;
   onClearFilters: () => void;
+  areFiltered: boolean;
 };
 
 export const CarFilters = ({
@@ -22,6 +23,7 @@ export const CarFilters = ({
   category,
   onCategoryChange,
   onClearFilters,
+  areFiltered,
 }: CarFiltersProps) => {
   return (
     <div className="mb-8 flex flex-wrap items-center gap-3">
@@ -69,12 +71,15 @@ export const CarFilters = ({
         <option value="Premium">Premium</option>
         <option value="Luxury">Luxury</option>
       </select>
-      <button
-        className="rounded-full border px-4 py-2 text-sm cursor-pointer border-gray-300 bg-white text-gray-700 hover:border-red-600"
-        onClick={onClearFilters}
-      >
-        Clear Filters
-      </button>
+      {areFiltered && (
+        <button
+          className="rounded-full border px-4 py-2 text-sm cursor-pointer border-gray-300 bg-white text-gray-700 hover:border-red-600"
+          onClick={onClearFilters}
+          type="button"
+        >
+          Clear Filters
+        </button>
+      )}
     </div>
   );
 };
