@@ -28,7 +28,7 @@ Inspiration website I used as a guide: https://www.sixt.com/
   the Badge.
 - Wrote the README.md and pushed the last changes to main.
 
-Comments on how I felt about this challenge:
+### Comments on how I felt about this challenge:
 
 Starting the project by creating the interface and some types first was, I think,
 a good decision, and I had no problem with that. When I had to start creating all
@@ -124,3 +124,43 @@ flows down, so two siblings can't share a value between them it has to live in
 their closest common parent. That's the page.
 
 Applied styles and change de "All" option in both select to "All categories" and "All types" to describe better what each select does.
+
+
+### Comments about this challenge:
+
+The part I felt most comfortable with was using state for the filters and
+building the controls (the search input, the selects, the Automatic button),
+creating a piece of state for each one. I had practised that before starting
+the challenge, so when I got there it wasn't a problem. Maybe wiring the filter
+conditions together made me stop and think about the syntax for combining them
+all at once, but it was ok.
+
+Where the state should live did make me think. I won't lie, at the time CarsPage
+felt redundant to me when I already had CarList. But I remembered what we
+discussed in the first challenge, that CarList should only be responsible for
+rendering the list of cars. And once I split CarList and CarFilters they ended
+up as siblings, so lifting the state was necessary. Lifting it all the way up to
+App.tsx didn't feel right either, since it would have cluttered App, so that was
+a clear reason to create CarsPage.
+
+Going back to the moment I split the components: passing all the functions down
+as props was the hardest part of the whole challenge. I struggled with knowing
+when to invoke a handler and when to just pass it, with how to type each
+function, and things like that. I learned a lot there about handling state
+through props. I won't lie, I still find it a bit difficult, but I understood it
+well enough.
+
+### DECISION about CarsPage and button to clear filters 
+
+A user who has set a search, a toggle and two selects has no
+way back to the full list other than undoing each control one by one, so a button to clear filters was neccesary
+
+The reset function lives in CarsPage, because that's where the four pieces of
+state live. CarFilters couldn't clear them even if it wanted to, they aren't
+its own. It gets the reset as a prop, onClearFilters, a notification with no
+data attached, exactly like onToggleAutomatic.
+
+The button only shows when at least one filter is active. A control that does
+nothing is noise. Knowing whether there is anything to clear means comparing
+each filter against its initial value, which is derived data again, calculated
+on each render like filteredCars rather than stored in state.
