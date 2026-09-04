@@ -2,12 +2,17 @@ import { useState } from "react";
 import { Car, VehicleTypeFilter, CategoryFilter } from "../interfaces/Car";
 import { CarList } from "../components/CarList";
 import { CarFilters } from "../components/CarFilters";
+import { CarListSkeleton } from "../components/CarListSkeleton";
+import { ErrorMessage } from "../ui/ErrorMessage";
 
 type CarsPageProps = {
   cars: Car[];
+  loading: boolean;
+  error: string | null;
+  getCars: () => void;
 };
 
-export const CarsPage = ({ cars }: CarsPageProps) => {
+export const CarsPage = ({ cars, loading, error, getCars }: CarsPageProps) => {
   const [search, setSearch] = useState("");
   const [onlyAutomatic, setOnlyAutomatic] = useState(false);
   const [vehicleTypeSelect, setVehicleTypeSelect] =
@@ -46,6 +51,8 @@ export const CarsPage = ({ cars }: CarsPageProps) => {
     );
   });
 
+  if (loading) return <CarListSkeleton />;
+  if (error) return <ErrorMessage message={error} onRetry={getCars} />;
   return (
     <div>
       <CarFilters

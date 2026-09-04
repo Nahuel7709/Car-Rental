@@ -1,4 +1,4 @@
-import { Car } from "../interfaces/Car";
+import { type Car } from "../interfaces/Car.ts";
 
 export const cars: Car[] = [
   {
