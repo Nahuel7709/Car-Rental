@@ -183,3 +183,19 @@ For loading I chose a skeleton instead of a spinner, because it keeps the shape 
 Showing the error is not much use if the only way out is reloading the page, so ErrorMessage receives an onRetry prop with a button that runs the fetch again. To be able to do that I took getCars out of the useEffect and defined it in App.tsx, so the useEffect only calls it and the same function can go down as a prop to CarsPage and from there to ErrorMessage. I also had to fix something: at first getCars did not reset the states, so when the user pressed retry the error was still there and loading was already false, and nothing would have changed on screen. So now getCars sets error back to null and loading back to true before doing the fetch.
 
 About AI: same as in the previous challenges, I used it to explain concepts I was not sure about. Here it also generated the Tailwind markup for the skeleton and the ErrorMessage
+
+### Changes after the review
+
+The API URL was hard coded in api/cars.ts. I moved it to a Vite environment variable, VITE_API_URL, with a .env.example committed. Something I learned here: the front .env is not a secret, Vite replaces the variable with its literal value at build time, so it ends up inside the bundle that anyone can read.
+
+I also took the port out of the backend code, reading process.env.PORT with 3000 as a fallback, because hosting platforms assign the port themselves and expect the app to listen there.
+
+cors() with no arguments sends Access-Control-Allow-Origin: *, which means any site can read the responses from a browser. Now it takes an origin option read from process.env.CORS_ORIGIN, with the Vite port as a fallback. I checked the header in the Network tab and also set a wrong origin on purpose to see it fail, otherwise I could not tell if the config was doing anything.
+
+I did not create a .env in the backend. Both values have a safe default that is already correct locally, so the file would only repeat the fallback. It becomes necessary with the first value that cannot have a default in the code, like an api key. That is the difference: configuration changes per environment but nobody cares if you see it, a secret must never be seen, and only the second one forces the file.
+
+About fetchCars returning Promise<Car[]>: it does not verify anything. TypeScript does not exist at runtime, the types are stripped before the code runs, so no type can check data coming from the network. res.json() returns any for that reason, and my return type is a claim the compiler accepts. It protects everything downstream but not the entry point. The real fix is runtime validation, left for later.
+
+I added a typecheck script to the backend. I had not realised that tsx strips the types without checking them, so until now nothing verified them at all.
+
+Smaller things: removed Request and Response, imported but unused, and the Express annotation on app, since express() already tells the compiler what it returns. That connects with the any above: inference is enough for my own code, and the border with the outside world is where I actually have to write the type. Removed VehicleTypeFilter and CategoryFilter from the backend copy of Car, since "All" is a UI control state and not part of the domain.

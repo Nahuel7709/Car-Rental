@@ -15,7 +15,8 @@ function App() {
       setLoading(true);
       const data = await fetchCars();
       setCars(data);
-    } catch (error) {
+    } catch (err) {
+      console.log(err);
       setError("Error trying to load the cars");
     } finally {
       setLoading(false);
