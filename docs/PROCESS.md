@@ -190,7 +190,7 @@ The API URL was hard coded in api/cars.ts. I moved it to a Vite environment vari
 
 I also took the port out of the backend code, reading process.env.PORT with 3000 as a fallback, because hosting platforms assign the port themselves and expect the app to listen there.
 
-cors() with no arguments sends Access-Control-Allow-Origin: *, which means any site can read the responses from a browser. Now it takes an origin option read from process.env.CORS_ORIGIN, with the Vite port as a fallback. I checked the header in the Network tab and also set a wrong origin on purpose to see it fail, otherwise I could not tell if the config was doing anything.
+cors() with no arguments sends Access-Control-Allow-Origin: \*, which means any site can read the responses from a browser. Now it takes an origin option read from process.env.CORS_ORIGIN, with the Vite port as a fallback. I checked the header in the Network tab and also set a wrong origin on purpose to see it fail, otherwise I could not tell if the config was doing anything.
 
 I did not create a .env in the backend. Both values have a safe default that is already correct locally, so the file would only repeat the fallback. It becomes necessary with the first value that cannot have a default in the code, like an api key. That is the difference: configuration changes per environment but nobody cares if you see it, a secret must never be seen, and only the second one forces the file.
 
@@ -199,3 +199,29 @@ About fetchCars returning Promise<Car[]>: it does not verify anything. TypeScrip
 I added a typecheck script to the backend. I had not realised that tsx strips the types without checking them, so until now nothing verified them at all.
 
 Smaller things: removed Request and Response, imported but unused, and the Express annotation on app, since express() already tells the compiler what it returns. That connects with the any above: inference is enough for my own code, and the border with the outside world is where I actually have to write the type. Removed VehicleTypeFilter and CategoryFilter from the backend copy of Car, since "All" is a UI control state and not part of the domain.
+
+# Challenge 4
+
+### Process of doing this challenge
+
+I created a CarsContext with a CarsProvider, but I did not put the fetching logic inside the provider. I moved it to a useCars hook with the three states, the getCars function and the useEffect, and the provider only calls that hook and passes the result as the value. That way the provider is three lines and has no logic of its own.
+
+I did the same with the filters, in a useFilters hook that takes the cars and returns the four states, their setters, clearFilters, areFiltered and filteredCars. CarsPage now reads the cars from the context and calls useFilters with them.
+
+CarList did not change at all. It still receives the cars it has to render through a prop and does not know where they came from, which is the decision from challenge 1 still holding.
+
+### DECISION about the default value of the context
+
+The default value of createContext is only used when a component consumes the context without being inside the provider, so it is what happens when I make a mistake. My first version was a fake object with cars empty and loading true. The problem is that this is indistinguishable from reality: a correctly placed component gets exactly the same thing on the first render. So if the screen stayed on the skeleton forever I would have no way of knowing whether it was loading or whether I forgot the provider. The bug disguises itself as normal behaviour.
+
+I changed it to undefined, because the provider can never give undefined, so receiving it has only one possible explanation. That broke the typecheck, which was the point: TypeScript started forcing me to handle a case that was already there and nobody was telling me about. I solved it with a useCarsContext hook that throws with a message if the value is undefined, and returns it otherwise. After the throw TypeScript already knows the value cannot be undefined, so the type narrows on its own, the same as with the early returns in CarsPage.
+
+### DECISION about where the provider lives
+
+I left the provider inside Layout, wrapping only CarsPage, instead of wrapping the whole app. Today nothing outside CarsPage consumes the cars, so putting it higher would be solving a problem I do not have. The day the Header or anything else needs the data, moving it up is one line.
+
+### DECISION about the filter state
+
+The filter state did not go into the context. It went to the useFilters hook, called from the page. The cars are data that several pages could need, and that is what the context is for. The filters are the state of one screen, and no other page has any use for them, so putting them in the context would make global something that belongs to one page.
+
+I know this leaves open what I answered in the third question: with the filters living in the hook that CarsPage calls, they still die when CarsPage unmounts, so they will be lost when the router arrives. I decided not to solve that yet because there is no router, so I cannot even test the problem. When there is one I will have to decide whether the filters go up or whether they live in the URL, which is the other option I can think of.

@@ -1,55 +1,25 @@
-import { useState } from "react";
-import { Car, VehicleTypeFilter, CategoryFilter } from "../interfaces/Car";
 import { CarList } from "../components/CarList";
 import { CarFilters } from "../components/CarFilters";
 import { CarListSkeleton } from "../components/CarListSkeleton";
 import { ErrorMessage } from "../ui/ErrorMessage";
+import { useCarsContext } from "../context/CarsContext";
+import { useFilters } from "../hooks/useFilters";
 
-type CarsPageProps = {
-  cars: Car[];
-  loading: boolean;
-  error: string | null;
-  getCars: () => void;
-};
-
-export const CarsPage = ({ cars, loading, error, getCars }: CarsPageProps) => {
-  const [search, setSearch] = useState("");
-  const [onlyAutomatic, setOnlyAutomatic] = useState(false);
-  const [vehicleTypeSelect, setVehicleTypeSelect] =
-    useState<VehicleTypeFilter>("All");
-  const [category, setCategory] = useState<CategoryFilter>("All");
-
-  function clearFilters() {
-    setSearch("");
-    setOnlyAutomatic(false);
-    setVehicleTypeSelect("All");
-    setCategory("All");
-  }
-
-  const areFiltered =
-    search !== "" ||
-    onlyAutomatic ||
-    vehicleTypeSelect !== "All" ||
-    category !== "All";
-
-  const searchTerm = search.toLowerCase().trim();
-
-  const filteredCars = cars.filter((car) => {
-    const searchFilter =
-      car.brand.toLowerCase().includes(searchTerm) ||
-      car.model.toLowerCase().includes(searchTerm);
-
-    const automaticFilter = !onlyAutomatic || car.gearbox === "Automatic";
-
-    const vehicleTypeFilter =
-      vehicleTypeSelect === "All" || car.vehicleType === vehicleTypeSelect;
-
-    const categoryFilter = category === "All" || car.category === category;
-
-    return (
-      searchFilter && automaticFilter && vehicleTypeFilter && categoryFilter
-    );
-  });
+export const CarsPage = () => {
+  const { cars, loading, error, getCars } = useCarsContext();
+  const {
+    search,
+    onlyAutomatic,
+    vehicleTypeSelect,
+    category,
+    clearFilters,
+    areFiltered,
+    filteredCars,
+    setSearch,
+    setOnlyAutomatic,
+    setVehicleTypeSelect,
+    setCategory,
+  } = useFilters(cars);
 
   if (loading) return <CarListSkeleton />;
   if (error) return <ErrorMessage message={error} onRetry={getCars} />;
