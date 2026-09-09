@@ -2,7 +2,7 @@ import { CarList } from "../components/CarList";
 import { CarFilters } from "../components/CarFilters";
 import { CarListSkeleton } from "../components/CarListSkeleton";
 import { ErrorMessage } from "../ui/ErrorMessage";
-import { useCarsContext } from "../context/CarsContext";
+import { useCarsContext } from "../context/cars";
 import { useFilters } from "../hooks/useFilters";
 
 export const CarsPage = () => {

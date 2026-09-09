@@ -225,3 +225,9 @@ I left the provider inside Layout, wrapping only CarsPage, instead of wrapping t
 The filter state did not go into the context. It went to the useFilters hook, called from the page. The cars are data that several pages could need, and that is what the context is for. The filters are the state of one screen, and no other page has any use for them, so putting them in the context would make global something that belongs to one page.
 
 I know this leaves open what I answered in the third question: with the filters living in the hook that CarsPage calls, they still die when CarsPage unmounts, so they will be lost when the router arrives. I decided not to solve that yet because there is no router, so I cannot even test the problem. When there is one I will have to decide whether the filters go up or whether they live in the URL, which is the other option I can think of.
+
+### Challenge 4 corrections
+
+Since getCars is an async function it always returns a promise, so I changed its type in CarsContext to () => Promise<void>. In the onRetry prop that goes to ErrorMessage I left it as () => void, because void as a return type does not mean the function returns nothing, it means the caller ignores whatever comes back, and that button does not use the promise. That is also why passing getCars there still compiles.
+
+About the lint warnings in CarsContext: I like having everything related together because I find it easier to read, so to keep that I created a cars subfolder inside context, where I split the context from the provider and export both from a barrel file. I did not put CarsContext itself in the index. Only the provider and the hook are public. useCarsContext exists to be the only door in, the one that checks you are inside the provider, so exporting the raw context would leave a back door that skips that check.

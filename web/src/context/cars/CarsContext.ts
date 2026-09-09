@@ -1,22 +1,16 @@
-import { createContext, ReactNode, useContext } from "react";
-import { type Car } from "../interfaces/Car";
-import { useCars } from "../hooks/useCars";
+import { createContext, useContext } from "react";
+import { type Car } from "../../interfaces/Car";
 
 type CarsContextValue = {
   cars: Car[];
   loading: boolean;
   error: string | null;
-  getCars: () => void;
+  getCars: () => Promise<void>;
 };
 
 export const CarsContext = createContext<CarsContextValue | undefined>(
   undefined,
 );
-
-export function CarsProvider({ children }: { children: ReactNode }) {
-  const value = useCars();
-  return <CarsContext.Provider value={value}>{children}</CarsContext.Provider>;
-}
 
 export function useCarsContext() {
   const ctx = useContext(CarsContext);
