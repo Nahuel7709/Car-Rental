@@ -1,16 +1,14 @@
-import { ReactNode } from "react";
+import { Outlet } from "react-router";
 import { Footer } from "./Footer";
 import { Header } from "./Header";
 
-type LayoutProps = {
-  children: ReactNode;
-};
-
-export const Layout = ({ children }: LayoutProps) => {
+export const Layout = () => {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex min-h-screen flex-col bg-canvas text-ink-900">
       <Header />
-      <main className="max-w-8xl mx-auto px-4 py-8">{children}</main>
+      <main className="max-w-8xl mx-auto w-full flex-1 px-4 py-8 sm:px-6">
+        <Outlet />
+      </main>
       <Footer />
     </div>
   );

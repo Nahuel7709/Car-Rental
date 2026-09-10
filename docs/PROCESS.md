@@ -231,3 +231,124 @@ I know this leaves open what I answered in the third question: with the filters 
 Since getCars is an async function it always returns a promise, so I changed its type in CarsContext to () => Promise<void>. In the onRetry prop that goes to ErrorMessage I left it as () => void, because void as a return type does not mean the function returns nothing, it means the caller ignores whatever comes back, and that button does not use the promise. That is also why passing getCars there still compiles.
 
 About the lint warnings in CarsContext: I like having everything related together because I find it easier to read, so to keep that I created a cars subfolder inside context, where I split the context from the provider and export both from a barrel file. I did not put CarsContext itself in the index. Only the provider and the hook are public. useCarsContext exists to be the only door in, the one that checks you are inside the provider, so exporting the raw context would leave a back door that skips that check.
+
+# Challenge 5
+
+## Before coding
+
+**Should the details page use cars from Context or request one by ID?**
+
+I would request it by ID from the corresponding endpoint, reading the ID from the
+URL with `req.params`. If the details page read from the Context instead, someone
+opening `/cars/3` directly — from a shared link or after a refresh — would have to
+download every car with all of its data just to show one.
+
+**What should happen for a car URL that does not exist?**
+
+The backend should return a 404 saying that car was not found: the route is valid
+but the car is not. On the frontend that is a state of `CarDetailsPage`, not the
+wildcard route, and it gives the user a way back to the car list. There is no
+retry button, because retrying cannot change the answer.
+
+**Should the page have its own loading and error states?**
+
+Yes, because it is a different request with a different lifecycle — they can be at
+different stages. The list can be loaded while the detail is still fetching. It
+also needs a state the list does not have: not found.
+
+**What should happen to active filters when returning to the list?**
+
+For now they are lost, because they do not persist in state or in the URL. I could
+make them persist in state, but that would still be the wrong approach: if someone
+shares the link it goes without the filters, if you go back you lose everything,
+and the same happens on F5.
+
+The right place for them is the URL, as query parameters
+(`/cars?search=toyota&category=Luxury`). React Router exposes `useSearchParams`,
+which has almost the same API as `useState`, so `useFilters` would barely change.
+That also means the back button would undo filters one at a time, which is what a
+user expects. I did not implement it because this challenge only asks me to
+explain it.
+
+**Where should CarsProvider live now that there is more than one page?**
+
+I would leave it where it is, adding another page (`CarDetailsPage`) and the
+router. The provider goes outside `Routes` — because if the provider lives inside
+a route `element`, it unmounts on navigation and fetches everything again. `Layout`
+becomes the parent route holding the other routes, and instead of taking `children`
+it uses `Outlet`, the React Router component that renders whichever child route
+matches.
+
+Note that this does not save the filters: they live in `CarsPage`, and that page
+does unmount when you navigate away.
+
+## Process
+
+### Routing
+
+I installed React Router and set the routes up in `App.tsx`, leaving `CarsProvider`
+outside `Routes`. `Layout` became the parent route, with `CarsPage` and
+`CarDetailsPage` as siblings under it. The details route takes the ID as a
+parameter, and `CarDetailsPage` reads it with `useParams()`.
+
+I also added the wildcard route — anything that does not match the other routes
+renders `NotFoundPage` — and a redirect so that entering `/` sends you to `/cars`.
+
+### Linking to the detail
+
+I replaced the button in `CarCard` with a `Link` pointing to `/cars/<id>`. At this
+point the detail page could not show the car yet, because the backend had no
+endpoint returning a single car by ID. That was the next step.
+
+### Backend: GET /cars/:id
+
+I read the ID from the params and convert it to a number, since everything coming
+from a URL is a string and I need a number for the comparison.
+
+My contract is that a valid ID is a whole number. If it is not — someone typing
+something like `banana` — I return **400 Bad Request**, because the request itself
+is malformed. If the ID is valid but no car matches it, I return **404**: the
+request was fine, the car simply does not exist. Otherwise I return the car.
+
+### Frontend: fetching one car
+
+In `api/cars.ts` I added the function that fetches a single car. If the response
+status is 400 or 404 it returns `null`: there is nothing to return, and it is not
+a server failure — the client either malformed the request or asked for something
+that does not exist. From the user's point of view both mean the same thing, so
+they get the same screen.
+
+Anything else that is not `ok` — a 500, for example — throws, because that is a
+real error and retrying can help. If the response is fine, I return the data.
+
+### The hook: useCar
+
+I do the fetch inside a `useEffect`, because storing the data in state during the
+render would cause an infinite loop.
+
+The difference with the list is the dependency array. Going from `/cars/1` to
+`/cars/2` does **not** unmount `CarDetailsPage` — it is the same route and the same
+component, so nothing would trigger a new fetch and we would be stuck looking at
+car 1 forever. The effect has to re-run when the ID changes.
+
+`getCar` lives outside the effect because the retry button in `ErrorMessage` also
+needs it. That means the effect depends on `getCar`, and `getCar` in turn depends
+on the ID — React cannot know that on its own.
+
+Without `useCallback`, `getCar` would be a brand new function on every render, the
+effect would see it as changed every time, and it would run in a loop. `useCallback`
+keeps it as the same function while the ID does not change, so declaring
+`[getCar]` in the effect is equivalent to depending on the ID, but in a way the
+linter can verify.
+
+### The page
+
+`CarDetailsPage` uses the state the hook gives it and renders one of **four**
+things: the skeleton while loading, the error screen with a retry button, the "car
+not found" screen, or the car. The order matters — loading has to be checked first,
+otherwise the page would show "not found" during the very first render, when
+nothing has arrived yet.
+
+I asked the IA to do the visual design of the
+app: the Tailwind theme, the layout of the cards and the detail page, the
+skeletons and the empty and not-found screens.

@@ -2,4 +2,25 @@
 
 @theme {
   --container-8xl: 90rem;
+
+  /* Marca */
+  --color-brand-50: #ecfdf5;
+  --color-brand-100: #d1fae5;
+  --color-brand-200: #a7f3d0;
+  --color-brand-500: #10b981;
+  --color-brand-600: #059669;
+  --color-brand-700: #047857;
+
+  /* Texto y superficies (grises fríos) */
+  --color-ink-900: #0f172a;
+  --color-ink-700: #334155;
+  --color-ink-500: #64748b;
+  --color-ink-300: #cbd5e1;
+  --color-ink-200: #e2e8f0;
+  --color-ink-100: #f1f5f9;
+  --color-canvas: #f8fafc;
+}
+
+html {
+  scroll-behavior: smooth;
 }

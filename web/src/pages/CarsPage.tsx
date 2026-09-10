@@ -23,8 +23,19 @@ export const CarsPage = () => {
 
   if (loading) return <CarListSkeleton />;
   if (error) return <ErrorMessage message={error} onRetry={getCars} />;
+
   return (
     <div>
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold tracking-tight text-ink-900 sm:text-3xl">
+          Cars available
+        </h2>
+        <p className="mt-1 text-sm text-ink-500">
+          {filteredCars.length} {filteredCars.length === 1 ? "car" : "cars"}
+          {areFiltered && " matching your filters"}
+        </p>
+      </div>
+
       <CarFilters
         search={search}
         onSearchChange={setSearch}
@@ -37,6 +48,7 @@ export const CarsPage = () => {
         onClearFilters={clearFilters}
         areFiltered={areFiltered}
       />
+
       <CarList cars={filteredCars} />
     </div>
   );

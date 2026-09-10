@@ -1,20 +1,25 @@
 import { ComponentProps } from "react";
+import { buttonClass, type ButtonVariant } from "./buttonStyles";
 
 type ButtonProps = ComponentProps<"button"> & {
   fullWidth?: boolean;
+  variant?: ButtonVariant;
 };
 
 export const Button = ({
   children,
   fullWidth = true,
+  variant = "primary",
+  className = "",
   ...rest
 }: ButtonProps) => {
   return (
     <button
       type="button"
-      className={`cursor-pointer rounded-lg bg-emerald-600 px-4 py-2 font-medium text-white transition hover:bg-emerald-700 focus-visible:ring-2 focus-visible:ring-emerald-300 ${
-        fullWidth ? "w-full" : ""
-      }`}
+      className={buttonClass(
+        variant,
+        `${fullWidth ? "w-full" : ""} ${className}`,
+      )}
       {...rest}
     >
       {children}
