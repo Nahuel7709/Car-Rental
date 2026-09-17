@@ -4,9 +4,15 @@ import { CarListSkeleton } from "../components/CarListSkeleton";
 import { ErrorMessage } from "../ui/ErrorMessage";
 import { useCarsContext } from "../context/cars";
 import { useFilters } from "../hooks/useFilters";
+import { useEffect } from "react";
 
 export const CarsPage = () => {
   const { cars, loading, error, getCars } = useCarsContext();
+
+  useEffect(() => {
+    getCars();
+  }, [getCars]);
+
   const {
     search,
     onlyAutomatic,

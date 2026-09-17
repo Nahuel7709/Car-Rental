@@ -352,3 +352,54 @@ nothing has arrived yet.
 I asked the IA to do the visual design of the
 app: the Tailwind theme, the layout of the cards and the detail page, the
 skeletons and the empty and not-found screens.
+
+## Corrections
+
+### Where the provider lives and when the list is requested
+
+The CarsProvider had a useEffect inside it that ran getCars. Since the provider wraps all the routes, it mounts once when the app starts and never unmounts, so the full car list was requested no matter which route the user opened. Opening /cars/1 directly requested the whole list and car 1, which is the opposite of the reason I gave for fetching a single car by id.
+
+What I did was take the useEffect out of the provider. The provider still gives access to cars, loading, error and getCars, but now it is up to each component that needs the list to request it with a useEffect of its own. For now that is only CarsPage, which is the one component that exists only while the user is looking at the list.
+
+The way I would put it: before, where the state lives and when the request happens were the same decision, because the effect was inside the provider. Now they are two separate decisions. The provider decides where the state lives, and each consumer decides when it needs the data.
+
+That change also made getCars need useCallback. Once the function travels through the context and becomes a dependency of an effect, its identity matters: a function declared inside a component is a new object on every render, so the effect would see a changed dependency every time and run again, which is the infinite loop I was trying to avoid in the first place. Its dependency array is empty because the function only uses the useState setters and a module import, and none of those change between renders.
+
+### What this trade cost me
+
+This is not a clean win and I want to write down what it cost, because I only saw it when I opened the Network tab.
+
+Fetching the list from CarsPage fixed the direct entry case, but it introduced a different one. If the user opens the list, clicks a car and presses Back, CarsPage mounts again, the effect runs again, and the list is requested again with the skeleton showing, even though the provider never unmounted and still has the cars in its state. Before this change that did not happen, because the provider had fetched them once at startup.
+
+### Validating the id on the backend
+
+The handler was converting first and validating afterwards:
+
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) { ... }
+
+That let things through that I did not expect. /cars/1e0 returned car 1, and so did /cars/1.0, /cars/0x1 and /cars/+1. It is not a bug in Number: Number is a general purpose numeric parser and it accepts scientific notation, hexadecimal, whitespace and signs, which is exactly its job. It was the wrong tool for the question I was actually asking, which is whether this string is a plain whole number.
+
+The real problem was the order. Converting first destroys the evidence I needed to validate: once "1e0" has become 1, there is no way to tell it was written oddly. So the rule I took from this is to validate the value in the shape it arrived in, and only convert after it has passed.
+
+Now the handler tests req.params.id as a string, before touching it, against a regular expression that only accepts digits from beginning to end. The two anchors are the important part: without them the expression would look for digits anywhere in the text, so something like "abc123" would pass. With them it means digits end to end and nothing else.
+
+I decided to let "0" and ids with leading zeros like "007" pass the validation and fall through to the 404 instead of rejecting them with a 400. They are well formed ids that simply do not exist, so 404 describes the situation better than 400.
+
+### Error messages
+
+"Bad request" and "Not found" only repeated what the HTTP status code already said, so they added nothing for whoever reads them.
+
+A useful error message says what went wrong and what was expected instead, so the 400 now says that the car id must be a whole number, and the 404 includes the id that was asked for, which is the part that actually helps when someone is debugging.
+
+Both keep the same { message } shape. An API that returns errors in different shapes depending on the case is painful to consume, because the client has to guess how to read each one.
+
+One decision that goes with this: on the frontend, fetchCar returns null for both a 400 and a 404, so both end up showing the not found screen. The backend does distinguish them, because anyone integrating with the API needs to know whether the request was malformed or whether the resource is missing. But for the user the two mean the same thing, since a person only lands on one of those URLs through a broken link or by typing something into the address bar themselves, never through the UI. In both cases there is no car at that address and nothing to retry.
+
+### A note on filters in the URL and browser history
+
+Something I had not thought about when I said the filters could live in the URL: not every URL change should become a browser history entry.
+
+Changing the URL can push a new entry onto the history or replace the current one. If every letter typed into the search box pushed a new entry, typing "toyota" would leave six entries behind it, and the user pressing Back would delete the search one letter at a time before getting out of it. Nobody wants to go back letter by letter.
+
+So the two kinds of navigation are not the same. Typing in a filter should replace the current entry, because the user is refining the same view and not moving to a different one. Clicking a car should push a new entry, because that is a real navigation somewhere else.
