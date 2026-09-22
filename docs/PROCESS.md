@@ -403,3 +403,147 @@ Something I had not thought about when I said the filters could live in the URL:
 Changing the URL can push a new entry onto the history or replace the current one. If every letter typed into the search box pushed a new entry, typing "toyota" would leave six entries behind it, and the user pressing Back would delete the search one letter at a time before getting out of it. Nobody wants to go back letter by letter.
 
 So the two kinds of navigation are not the same. Typing in a filter should replace the current entry, because the user is refining the same view and not moving to a different one. Clicking a car should push a new entry, because that is a real navigation somewhere else.
+
+# Challenge 6
+
+## Before coding questions:
+
+1. How is a database different from the current TypeScript file?
+   They are very different. The TypeScript file we have today lets us display a set of
+   cars that are already in it, but it does not let us store cars so that they persist.
+   To add, edit or delete a car you have to change code: edit the file, push it and
+   restart the server. It does not persist because it lives in the process memory, so
+   anything written there is lost on restart. Two backend instances would be two
+   separate arrays with nothing keeping them in sync. Queries have to be written in
+   TS/JS, and it is all or nothing: even if only a few cars end up being shown, you
+   first have to load all of them and then filter in JavaScript. Another problem is
+   that there is no way to relate things to each other — how would I link a car to its
+   bookings? A database handles all of this much better. It lets the user add, delete
+   and edit records (as long as their credentials allow it, which is a separate topic)
+   and have those changes persist, and it lets us query for exactly what we need.
+
+2. What belongs in environment variables?
+   Environment variables hold values that change depending on where the project runs
+   (local machine, staging, production) — for example the base URL or the server port.
+   They also hold secrets: values that must not live in the code for security reasons,
+   such as an API key or the database URL. These variables go in a `.env` file which is
+   not committed to Git, because the information is sensitive: anyone who gets hold of
+   our API key or database URL could reach our database or backend and do whatever they
+   want. That is why we commit a `.env.example` with empty values instead, and the real
+   values are requested separately and handed to you depending on the job. In our case,
+   since this is a practice project, they are explained in the README.md.
+
+3. What is a migration and why is it needed?
+   A migration is a file containing the changes to the structure of the database, saved
+   with a timestamp and kept in order. The problem it solves is this: we have the schema,
+   which describes how the structure of the database should look TODAY, but the database
+   already exists, with data in it and possibly an older structure. So suppose we change
+   something in that structure. What do we do — drop the database and recreate it from
+   the schema? We would lose all the data, and in production that is a disaster. A
+   migration lets us get the table to how it should look today without dropping and
+   recreating the database. It lets us change the structure of a database that already
+   exists.
+
+4. What is seed data and how is it different from a migration?
+   Seed data is a script that loads the initial data; a migration is a file containing
+   changes to the structure of the database.
+
+5. What should the API do if the database is unavailable?
+   It should return a 5xx error stating that something went wrong on the server side,
+   and give the user the option to retry (since this is the kind of problem that will
+   eventually be resolved). Be careful not to give the user too much information — just
+   the status and the fact that a server-side error occurred. The precise details have
+   to be logged internally, for the developers or whoever needs them.
+
+6. Should the frontend know that the backend now uses a database? Why?
+   No, because the frontend still receives the information the same way as before: it
+   calls the backend API endpoint and gets JSON back. The backend is the one talking to
+   the database, not the frontend.
+
+### How I designed the Car model
+
+I tried to keep the Car model as close as possible to the existing Car interface.
+The id is now auto-incrementing and assigned by the database, the image stayed as an
+optional String, and I kept pricePerDay as an Int rather than a Decimal because the
+values are whole numbers.
+
+I created the three enums because those properties can only hold certain values, not
+any arbitrary String. The values are written in SCREAMING_CASE, following the
+convention used in the Prisma documentation. To avoid making the frontend change
+because of those new values, the backend uses a mapper that translates them into the
+values the frontend already works with.
+
+For now I did not add any index. The queries the backend currently makes are: fetching
+all the cars, where an index would not help at all since we need to return every row
+anyway; and fetching a single car by its id, which is already indexed automatically by
+the primary key. If a larger query shows up in the future and turns out to be slow, we
+can evaluate adding one then.
+
+### Seed
+
+For the seed I created a `seed.ts` file inside the `prisma` folder, which imports the
+Prisma client I set up in `db/prisma.ts`. When the seed runs it first empties the `Car`
+table and then inserts all the seed cars. The reason for emptying it first is so the
+seed can be run as many times as you want and always end up with the same cars, instead
+of duplicating them.
+
+At first I did this with `deleteMany`, but that only removes the rows: the
+auto-increment sequence is a separate object that only moves forward, so it had no way
+of knowing the rows were gone. The first run used ids 1 to 14, and the second one
+carried on from 15. I replaced it with a `TRUNCATE ... RESTART IDENTITY`, which empties
+the table and resets the counter, so every run produces the same ids.
+
+The seed does not use the mapper: it writes directly using the database enum values.
+
+### Explain what changed in each backend route.
+
+GET /cars, instead of returning the array of cars, does a findMany on the whole
+Car table through the Prisma client where we set up the connection, so it brings
+everything in that table.
+
+GET /cars/:id, instead of getting a car out of the array with find, goes to the
+Car table through Prisma and uses findUnique with a where saying that the id from
+the params has to match the id of the car in the table. findUnique only accepts
+unique fields, and the id is the primary key, so it works.
+
+The validation stayed the same. Both routes are async now, since we await Prisma.
+They do not have a try/catch because Express 5 forwards rejected promises to the
+error middleware by itself.
+
+Both return the result passed through the mapper, so the frontend gets the enums
+in a better shape.
+
+### Explain how you handled database errors.
+
+Through the middleware, which goes at the end, after the routes, because Express
+goes through them in the order they are declared. It takes four parameters, and
+that is how Express knows it is the error middleware. The full error goes to the
+log, with the method and the URL; the client gets a 500 with a generic message.
+The reason is the one I gave in question 5 before starting: if I sent err.message,
+when the connection fails the client would receive the Supabase host, the port and
+the user. The expected errors, 400 and 404, do not go through here, they are
+answered in the route.
+
+### Describe any problems you found and how you solved them.
+
+The enums broke the contract with the frontend, for example SEDAN vs "Sedan". I
+decided the best way was to keep the SCREAMING_CASE and solve it in the backend
+with a mapper. Since I did not know exactly how to do this, I asked Claude to help
+me with that function and to explain it to me in detail.
+
+Another problem was that findUnique returns null and not undefined, which is what
+I had before with the array. I changed it and that was it. The route was answering 200 with a null body, and the app still looked fine in the browser because the frontend showed the not found screen anyway. I only caught it with curl.
+
+### Explain where you used AI and what you needed it to explain.
+
+AI helped me with the structure of the seed and how to code it, because honestly I
+could not work out how to do it from the documentation.
+
+The car mapper, as I said above, was written by AI, and I asked it to explain it
+to me since I had never done one before. I decided to do it because it seemed like
+the right thing for this case.
+
+I also needed AI to explain the initial Prisma setup to me, and I did it myself as
+it went, because I found that a bit confusing too.
+
+Also help me with the config to do the lint typecheck and build.

@@ -1,0 +1,47 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum VehicleType {
+  SEDAN
+  SUV
+  FAMILY_CAR
+  STATION_WAGON
+}
+
+enum Gearbox {
+  MANUAL
+  AUTOMATIC
+}
+
+enum Category {
+  ECONOMY
+  PREMIUM
+  LUXURY
+}
+
+model Car {
+  id               Int         @id @default(autoincrement())
+  brand            String
+  model            String
+  year             Int
+  imageUrl         String?
+  vehicleType      VehicleType
+  category         Category
+  pricePerDay      Int
+  seats            Int
+  bagCapacity      Int
+  suitcaseCapacity Int
+  gearbox          Gearbox
+  ageRequired      Int
+}
