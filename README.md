@@ -1,6 +1,6 @@
 # Car Rental
 
-A car rental web app built with React, TypeScript, Express. This first version displays a catalogue of cars available for rental using mock data from a backend with Express.
+A car rental web app built with React, TypeScript and Express. It displays a catalogue of cars available for rental, stored in a PostgreSQL database and served by the backend through a REST API.
 
 ## Tech stack:
 
@@ -14,8 +14,9 @@ A car rental web app built with React, TypeScript, Express. This first version d
 
 ## Requirements:
 
-- Node.js 20.19
+- Node.js 20.19 or higher
 - npm
+- A PostgreSQL database. You can create a free one on Supabase or Neon.
 
 ## How to start the project
 
@@ -25,20 +26,24 @@ Backend (runs on http://localhost:3000):
 
 - cd backend
 - npm install
-- create a .env file with the same content as .env.example
+- create a PostgreSQL database (for example a free project on Supabase or Neon) and copy its connection string
+- copy .env.example to .env and paste that connection string into DATABASE_URL
 - npx prisma generate
 - npx prisma migrate deploy
 - npx prisma db seed
 - npm run dev (runs the backend)
 
 Frontend (runs on http://localhost:5173):
--cd web
--npm install
--npm run dev (runs the frontend)
+- cd web
+- npm install
+- npm run dev (runs the frontend)
 
 ## Environment variables
 
-- web/.env - VITE_API_URL is the base URL of the backend. There is a .env.example with the value for local development. Vite only exposes variables that start with VITE\*, and it reads the file when the dev server starts, so restart it if you change it.
-- backend - PORT is optional and defaults to 3000. It is read from the environment, not from a file, because hosting platforms set it themselves.
-  -DATABASE_URL
-  -CORS_ORIGIN
+backend/.env (there is a .env.example with all the keys and empty values):
+
+- DATABASE_URL - required. There is no default, the server does not start without it. It is the connection string of your PostgreSQL database, in the format postgresql://USER:PASSWORD@HOST:5432/DATABASE
+- PORT - optional, defaults to 3000. Hosting platforms usually set it themselves.
+- CORS_ORIGIN - optional, defaults to http://localhost:5173. It is the origin allowed to call the API.
+
+The .env file is not committed, that is why there is a .env.example.

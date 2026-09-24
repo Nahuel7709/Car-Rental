@@ -14,7 +14,9 @@ const validIdRegex = /^\d+$/;
 app.use(cors({ origin: CORS_ORIGIN }));
 
 app.get("/cars", async (req, res) => {
-  const cars = await prisma.car.findMany({});
+  const cars = await prisma.car.findMany({
+    orderBy: { id: "asc" },
+  });
   res.json(cars.map((car) => toApiCar(car)));
 });
 
