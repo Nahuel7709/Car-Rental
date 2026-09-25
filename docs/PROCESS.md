@@ -547,3 +547,63 @@ I also needed AI to explain the initial Prisma setup to me, and I did it myself 
 it went, because I found that a bit confusing too.
 
 Also help me with the config to do the lint typecheck and build.
+
+# Challenge 7
+
+## Before coding
+
+### Explain the difference between authentication and authorization.
+
+Authentication is the page knowing who you are and your necessary data. Authorization is the page knowing if you have permission or not to do a certain action based on who you are.
+
+### Explain why passwords must never be stored directly.
+
+Because if we store a password directly in plain text, we run the risk that if our database leaks, all the users' passwords leak too, and this would be very serious because anyone who had access to our database has access to the users. And not only that, users often use the same password for several applications, banks, whatever, and because of our page we could end up giving attackers access to users' banks or other things.
+
+### Explain what password hashing is.
+
+Password hashing is when, instead of storing the password in plain text in our db, before storing it we convert it into a more complex text that is equivalent to the password. But it doesn't end here, because if we leave it like that, the attacker can find out the hash equivalent of a password, and if more users have that password they get access to more and more. In fact, nowadays there are ways to know the hash equivalents of a lot of passwords, so all it takes is for the db to leak, the attacker reads the hashes and looks them up to get access to each one. That's why, besides hashing, what we do is add a salt. A salt is a random piece that is added to the password before the hash, so a hash is never equal to another one even if they have the same password. It also helps a lot for the algorithm to be slower, like bcrypt or argon2 and not SHA-256, because if it's slower it costs the attacker much more time and resources to check those of millions of users, while for a user it's instant. To log in, the password the user entered in the login is hashed and the new hash is compared against the stored hash, if they are equal the user gets in.
+
+### Explain the difference between 401 and 403.
+
+401 is Unauthorized, which means you are not authenticated and you need to authenticate for that request. On the other hand, 403 is Forbidden, which means that based on your credentials you don't have permission to make that request.
+
+### Explain why the backend must check permissions.
+
+Because otherwise anyone who creates an account in the application would have a free pass to make any request, and many times we don't want this. For example, here in car-rental we don't want just anyone to be able to create a car, so what we do is check their credentials, and if they meet certain requirements they can make that request or not. It's important that the back does it because it's not enough to just do it from the front, since people can make requests through Postman, curl, etc, and if our back isn't prepared to handle permissions, anyone could do whatever they want.
+
+### Decide what belongs inside the authentication token.
+
+Inside the token payload there will be the sub, which is the user id, iat, when the token was issued, and exp, when it expires. I saw that some people put the role, but I thought it was better to leave it out, because if we change the user's role, the user would keep that role until the token expires, and I don't think that's correct. I know that in exchange I have the cost of making a query to the database per protected request, but it's a trade-off that I think is right in exchange for security and practicality.
+
+### Explain why an HTTP only cookie is safer than exposing the token to JavaScript.
+
+Because if I expose the token to JavaScript, I run the risk that, if I suffer an XSS attack, in which an attacker manages to inject code into my page, they can get the token, read it and do whatever they want with it until it expires. On the other hand, with an HTTP only cookie, the one that provides the token is the browser, it will never be found in the front's code and it is attached to the requests. This is much safer, but we also have to be careful with CSRF attacks, which is an attack in which another malicious site makes the victim's browser send a request to our page where the user is already logged in, and since the browser attaches cookies automatically, the request goes out with the victim's identity. But this can be solved easily by setting the cookie to Strict so the cookie is never sent in requests that originate from another site, or Lax for requests that only navigate to our site.
+
+### Decide how the current user is restored after a page refresh.
+
+When the user state is lost, the front makes the request to GET auth/me again, in which the browser provides the available cookie again, which survives the refresh. The backend verifies the JWT that the cookie contains, looks for the user and responds with a JSON in the body, ready for the front to know the logged in user.
+
+### Explain why registration must not allow someone to select ADMIN.
+
+Because this way any user could be ADMIN, even users we don't want to be. By default all users should be created as normal users, because it's not enough to just hide this option in the front, someone can select admin through Postman or a curl, so we let the role always be created by the back and it never reads it from the request. The main admin user can be created by hand through a seed in a safe way and without committing it. Then users with specific roles can be made through invitations or be assigned later in the app by someone with permissions.
+
+
+## Process:
+
+- I started by adding to the Prisma schema the Role enum that contains ADMIN and CUSTOMER, and I created the user table with its columns, in which the email is unique and the role defaults to CUSTOMER, for the reasons I explained before in Before coding. I ran the migration and we can see that it created the User table, the enum and the index for email, since it's unique and it will have to compare it with all the existing values every time a new one is inserted.
+- I installed argon2. I used this library because I looked it up and it's the one currently recommended by OWASP. I installed it before creating the seed for the admin user, since the seed is going to use it to hash the password. I created seed-admin, which inserts a user with the admin role into the db. This made me rename the existing seed to seed-cars so I could tell them apart. I decided to keep them separate so that if you only need to insert the admin user, you don't have to delete all the cars and seed them again, which is what our seed-cars does. To make the admin seed safe, the admin's "body" is taken from the environment variables, the password is hashed, the email is normalized and it's inserted with an upsert so there is idempotency, meaning that no matter how many times I run the seed, the result is the same. Also, if a variable is missing, it throws an error.
+
+Up to this point I think I did a good job. I was able to rely a lot on the Prisma documentation to update the schema and run the migration. What was hardest for me was making the seed, I had a hard time understanding where to put it in relation to the cars seed, but after separating them I understood the syntax much better. In general I got a bit tangled up in this part of the seed. I wrote it using the documentation and asked Claude to point out what was wrong, and I had the idea of separating the 2 seeds into different files, not only for the practical reason I mentioned but because it helped me understand it much better.
+
+Continuing the challenge, the next thing I did before starting to create the backend routes for auth was to organize the backend folder structure a bit better, since I'm going to implement Routes and Controllers. First I created a cars folder, where I put its interface and the mapper function, and there I created carsController and carsRouter. The cars router is the file where, based on a prefix, the different routes that can exist with that prefix are defined, and each one points to the function that handles it. The logic of each route lives in the controller. In the index there is only each prefix with its router (a group of routes).
+
+It helped me to imagine it like when you call a bank, a hospital or some other service. An operator answers (the index) and asks what you need help with: press 1 for payments, press 2 for cards, press 3 for loans (the index with the different prefixes). Inside each option there is another menu (the router). For example, if you press 1 for payments: press 1 to learn how to make a payment, press 2 if your payment was rejected. And when you choose one of those options, you finally talk to the person who actually solves your problem (the controller). The operator and the menus only send you to the right place, but the one who does the work is the person at the end.
+
+Now I created the auth route with its own folder that contains authController and authRouter. Inside authRouter I created the first route, POST /register. In the controller for this route I use Zod to validate the body that the client sends. I installed Zod and validate the body with a Zod schema using safeParse. safeParse always returns an object, so if its success property is false, I return a 400 with the message of the first issue in result.error.issues.
+
+The schema checks that the name has at least 3 characters (after trimming it), that the email is a valid email, and that the password has between 8 and 50 characters. I didn't add composition rules (uppercase, numbers, symbols) because OWASP currently recommend focusing on length instead, since those rules push people to predictable passwords like "Password1!". The maximum is there so nobody can send a huge text and make argon2 spend a lot of time hashing it.
+
+Then I take the validated data from result.data (never from req.body) in 3 variables: the password to hash it with argon2 and the email to normalize it (lowercase and trim). I never read the role from the body, so every new user gets the default CUSTOMER role. Also, Zod removes any field that is not in the schema, so if someone sends "role": "ADMIN" from Postman, it doesn't even reach result.data. I tested it and the user was created as CUSTOMER.
+
+Then, inside a try/catch, I create the user in the db with that data and return a 201 with only id, name, email and role, using select, so the passwordHash is never sent to the front. In the catch, if the error is a P2002 (unique email already exists) I return a 409 saying the email is already in use. If it's any other error I throw it again, so it reaches the error handler and becomes a 500. This difference is needed because if I don't catch the P2002 separately it would be treated as a 500, as if it were a server error, and it isn't. And if I caught every error as a 409, a real problem like the database being down would be hidden behind an "email already in use" message.
