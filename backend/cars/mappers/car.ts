@@ -1,4 +1,4 @@
-import type { CarModel } from "../generated/prisma/models.ts";
+import type { CarModel } from "../../generated/prisma/models.ts";
 import type { Car } from "../interfaces/Car.ts";
 
 const vehicleTypes = {
