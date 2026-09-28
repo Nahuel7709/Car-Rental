@@ -5,15 +5,7 @@ import argon2 from "argon2";
 import { Prisma } from "../generated/prisma/client.ts";
 import jwt from "jsonwebtoken";
 import "dotenv/config";
-
-const jwt_secret = process.env.JWT_SECRET;
-const isProduction = process.env.NODE_ENV === "production";
-
-if (!jwt_secret) {
-  throw new Error("jwt secret missing");
-}
-
-const JWT_SECRET: string = jwt_secret;
+import { cookieOptions, JWT_SECRET } from "./config.ts";
 
 const createUserSchema = z.object({
   name: z.string().trim().min(3, "Name has a minimum of 3 characters"),
@@ -90,11 +82,15 @@ export async function login(req: Request, res: Response) {
 
   res
     .status(200)
-    .cookie("token", token, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: "lax",
-      maxAge: 12 * 60 * 60 * 1000,
-    })
+    .cookie("token", token, cookieOptions)
     .json({ id: user.id, name: user.name, email: user.email, role: user.role });
+}
+
+export async function me(req: Request, res: Response) {
+  res.json(res.locals.user);
+}
+
+export function logout(req: Request, res: Response) {
+  res.clearCookie("token", cookieOptions);
+  res.status(204).end();
 }

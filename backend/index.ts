@@ -5,6 +5,7 @@ import cors from "cors";
 import type { Request, Response, NextFunction } from "express";
 import { carsRouter } from "./cars/carsRouter.ts";
 import { authRouter } from "./auth/authRouter.ts";
+import cookieParser from "cookie-parser";
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -13,6 +14,8 @@ const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:5173";
 app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
 
 app.use(express.json());
+
+app.use(cookieParser());
 
 app.use("/cars", carsRouter);
 
