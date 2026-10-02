@@ -77,25 +77,33 @@ function validateCar(form: CarForm): CarFieldErrors {
   if (form.imageUrl.trim() !== "" && !isValidUrl(form.imageUrl.trim())) {
     errors.imageUrl = "Enter a valid URL (https://...)";
   }
-  if (!isWholeNumber(form.pricePerDay) || Number(form.pricePerDay) <= 0) {
-    errors.pricePerDay = "Price must be a whole number greater than 0";
+  if (!isWholeNumber(form.pricePerDay)) {
+    errors.pricePerDay = "Price is required";
+  } else if (Number(form.pricePerDay) < 1 || Number(form.pricePerDay) > 200000) {
+    errors.pricePerDay = "Price must be between 1 and 200000";
   }
-  if (!isWholeNumber(form.seats) || Number(form.seats) <= 0) {
-    errors.seats = "Seats must be a whole number greater than 0";
+  if (!isWholeNumber(form.seats)) {
+    errors.seats = "Seats is required";
+  } else if (Number(form.seats) < 1 || Number(form.seats) > 30) {
+    errors.seats = "Seats must be between 1 and 30";
   }
-  if (!isWholeNumber(form.bagCapacity) || Number(form.bagCapacity) < 0) {
-    errors.bagCapacity = "Bags must be a whole number, 0 or more";
+  if (!isWholeNumber(form.bagCapacity)) {
+    errors.bagCapacity = "Bags is required";
+  } else if (Number(form.bagCapacity) < 0 || Number(form.bagCapacity) > 20) {
+    errors.bagCapacity = "Bags must be between 0 and 20";
   }
-  if (
-    !isWholeNumber(form.suitcaseCapacity) ||
-    Number(form.suitcaseCapacity) < 0
+  if (!isWholeNumber(form.suitcaseCapacity)) {
+    errors.suitcaseCapacity = "Suitcases is required";
+  } else if (
+    Number(form.suitcaseCapacity) < 0 ||
+    Number(form.suitcaseCapacity) > 20
   ) {
-    errors.suitcaseCapacity = "Suitcases must be a whole number, 0 or more";
+    errors.suitcaseCapacity = "Suitcases must be between 0 and 20";
   }
   if (!isWholeNumber(form.ageRequired)) {
     errors.ageRequired = "Minimum age is required";
-  } else if (Number(form.ageRequired) < 18) {
-    errors.ageRequired = "Minimum age must be 18 or more";
+  } else if (Number(form.ageRequired) < 18 || Number(form.ageRequired) > 50) {
+    errors.ageRequired = "Minimum age must be between 18 and 50";
   }
 
   return errors;

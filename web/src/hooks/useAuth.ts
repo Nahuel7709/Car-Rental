@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { User } from "../interfaces/User";
 import {
   fetchMe,
@@ -10,6 +10,7 @@ import {
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   async function login(email: string, password: string) {
     const loggedUser = await loginRequest(email, password);
@@ -26,18 +27,25 @@ export function useAuth() {
     setUser(null);
   }
 
-  useEffect(() => {
-    async function getUser() {
-      try {
-        const data = await fetchMe();
-        setUser(data);
-      } catch {
-        setUser(null);
-      } finally {
-        setLoading(false);
-      }
+  const checkSession = useCallback(async () => {
+    setAuthError(null);
+    setLoading(true);
+
+    try {
+      const data = await fetchMe();
+      setUser(data);
+    } catch {
+      setUser(null);
+      setAuthError(
+        "We couldn't check your account. The server may be unavailable.",
+      );
+    } finally {
+      setLoading(false);
     }
-    getUser();
   }, []);
-  return { user, loading, login, register, logout };
+
+  useEffect(() => {
+    checkSession();
+  }, [checkSession]);
+  return { user, loading, login, register, logout, authError, checkSession };
 }

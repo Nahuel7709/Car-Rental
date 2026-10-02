@@ -4,6 +4,8 @@ import type { Request, Response } from "express";
 import z from "zod";
 import { Category, Gearbox, VehicleType } from "../generated/prisma/enums.ts";
 
+const MAX_INT = 2147483647;
+
 const carSchema = z.object({
   brand: z.string().trim().min(2, "Minimum of 2 characters"),
   model: z.string().trim().min(2, "Minimum of 2 characters"),
@@ -11,12 +13,12 @@ const carSchema = z.object({
   imageUrl: z.url().optional(),
   vehicleType: z.enum(VehicleType),
   category: z.enum(Category),
-  pricePerDay: z.int().positive(),
-  seats: z.int().positive(),
-  bagCapacity: z.int().nonnegative(),
-  suitcaseCapacity: z.int().nonnegative(),
+  pricePerDay: z.int().positive().max(200000),
+  seats: z.int().positive().max(30),
+  bagCapacity: z.int().nonnegative().max(20),
+  suitcaseCapacity: z.int().nonnegative().max(20),
   gearbox: z.enum(Gearbox),
-  ageRequired: z.int().positive().min(18),
+  ageRequired: z.int().positive().min(18).max(50),
 });
 
 export async function getCars(req: Request, res: Response) {
@@ -40,6 +42,10 @@ export async function createCar(req: Request, res: Response) {
 }
 
 export async function getCarById(req: Request<{ id: string }>, res: Response) {
+  if (Number(req.params.id) > MAX_INT) {
+    res.status(400).json({ message: "Invalid id" });
+    return;
+  }
   const validIdRegex = /^\d+$/;
   if (!validIdRegex.test(req.params.id)) {
     res.status(400).json({ message: "The car id must be a whole number" });

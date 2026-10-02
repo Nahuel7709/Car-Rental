@@ -13,6 +13,15 @@ async function createUser() {
 
   const normalizedEmail = userEmail.toLowerCase().trim();
 
+  const user = await prisma.user.findUnique({
+    where: { email: normalizedEmail },
+    select: { role: true },
+  });
+
+  if (user && user.role !== "ADMIN") {
+    throw new Error("A user with this email already exists");
+  }
+
   const hashPassword = await argon2.hash(userPassword);
 
   await prisma.user.upsert({
@@ -26,7 +35,11 @@ async function createUser() {
     },
   });
 
-  console.log(`Admin user has been seeded`);
+  if (user === null) {
+    console.log("Admin user created");
+  } else {
+    console.log("Admin user updated");
+  }
 }
 
 createUser()

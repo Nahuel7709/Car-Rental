@@ -9,7 +9,11 @@ import { cookieOptions, JWT_SECRET } from "./config.ts";
 
 const createUserSchema = z.object({
   name: z.string().trim().min(3, "Name has a minimum of 3 characters"),
-  email: z.email("Email has to be a valid email"),
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .pipe(z.email("Email has to be a valid email")),
   password: z
     .string()
     .min(8, "Password has a minimum of 8 characters")
@@ -17,7 +21,11 @@ const createUserSchema = z.object({
 });
 
 const loginUserSchema = z.object({
-  email: z.email(),
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .pipe(z.email("Email has to be a valid email")),
   password: z.string(),
 });
 
@@ -31,11 +39,10 @@ export async function register(req: Request, res: Response) {
 
   const { name, email, password } = result.data;
   const passwordHash = await argon2.hash(password);
-  const normalizedEmail = email.toLowerCase().trim();
 
   try {
     const user = await prisma.user.create({
-      data: { name, email: normalizedEmail, passwordHash },
+      data: { name, email, passwordHash },
       select: { id: true, name: true, email: true, role: true },
     });
     res.status(201).json(user);
@@ -60,10 +67,9 @@ export async function login(req: Request, res: Response) {
   }
 
   const { email, password } = result.data;
-  const normalizedEmail = email.toLowerCase().trim();
 
   const user = await prisma.user.findUnique({
-    where: { email: normalizedEmail },
+    where: { email },
   });
   if (!user) {
     res.status(401).json({ message: "Invalid credentials" });
