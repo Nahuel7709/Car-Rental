@@ -153,3 +153,15 @@ describe("POST /auth/login", () => {
     expect(res.body.message).toBe("Invalid credentials");
   });
 });
+
+describe("Invalid JSON", () => {
+  it("returns 400 when the body is broken JSON", async () => {
+    const res = await request(app)
+      .post("/auth/login")
+      .set("Content-Type", "application/json")
+      .send('{"email": "ana@mail.com"');
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe("Invalid JSON");
+  });
+});
