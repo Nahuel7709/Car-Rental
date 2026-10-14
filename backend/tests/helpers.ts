@@ -29,3 +29,21 @@ export async function loginAs(credentials: {
   await agent.post("/auth/login").send(credentials);
   return agent;
 }
+
+export const validCarData = {
+  brand: "Toyota",
+  model: "Corolla",
+  year: 2022,
+  vehicleType: "SEDAN",
+  category: "ECONOMY",
+  pricePerDay: 5000,
+  seats: 5,
+  bagCapacity: 2,
+  suitcaseCapacity: 2,
+  gearbox: "AUTOMATIC",
+  ageRequired: 21,
+} as const;
+
+export async function createTestCar() {
+  return prisma.car.create({ data: validCarData });
+}
