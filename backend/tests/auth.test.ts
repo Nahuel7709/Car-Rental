@@ -83,3 +83,48 @@ describe("POST /auth/register", () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("POST /auth/login", () => {
+  it("returns 200 and an httpOnly cookie with valid credentials", async () => {
+    const user = {
+      name: "Ana",
+      email: "ana@mail.com",
+      password: "securepassword3324",
+    };
+    await request(app).post("/auth/register").send(user);
+
+    const res = await request(app)
+      .post("/auth/login")
+      .send({ email: user.email, password: user.password });
+
+    expect(res.status).toBe(200);
+    const cookie = res.headers["set-cookie"][0];
+    expect(cookie).toContain("token=");
+    expect(cookie).toContain("HttpOnly");
+  });
+
+  it("“returns 401 with a wrong password", async () => {
+    const user = {
+      name: "Ana",
+      email: "ana@mail.com",
+      password: "securepassword3324",
+    };
+    await request(app).post("/auth/register").send(user);
+
+    const res = await request(app)
+      .post("/auth/login")
+      .send({ email: user.email, password: "anotherpassword" });
+
+    expect(res.status).toBe(401);
+    expect(res.body.message).toBe("Invalid credentials");
+  });
+
+  it("“returns the same 401 for an email that does not exist", async () => {
+    const res = await request(app)
+      .post("/auth/login")
+      .send({ email: "anotheremail@mail.com", password: "password123" });
+
+    expect(res.status).toBe(401);
+    expect(res.body.message).toBe("Invalid credentials");
+  });
+});
