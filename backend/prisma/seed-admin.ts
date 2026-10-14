@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { prisma } from "../db/prisma.ts";
 import argon2 from "argon2";
+import { createUserSchema } from "../auth/authSchemas.ts";
 
 async function createUser() {
   const userName = process.env.ADMIN_NAME;
@@ -11,10 +12,22 @@ async function createUser() {
     throw new Error("User seed is missing name, email or password variable");
   }
 
-  const normalizedEmail = userEmail.toLowerCase().trim();
+  const result = createUserSchema.safeParse({
+    name: userName,
+    email: userEmail,
+    password: userPassword,
+  });
+
+  if (!result.success) {
+    throw new Error(
+      `Invalid ADMIN_* variables: ${result.error.issues[0].message}. Nothing was changed.`,
+    );
+  }
+
+  const { name, email, password } = result.data;
 
   const user = await prisma.user.findUnique({
-    where: { email: normalizedEmail },
+    where: { email },
     select: { role: true },
   });
 
@@ -22,14 +35,14 @@ async function createUser() {
     throw new Error("A user with this email already exists");
   }
 
-  const hashPassword = await argon2.hash(userPassword);
+  const hashPassword = await argon2.hash(password);
 
   await prisma.user.upsert({
-    where: { email: normalizedEmail },
+    where: { email },
     update: { passwordHash: hashPassword },
     create: {
-      email: normalizedEmail,
-      name: userName,
+      email,
+      name,
       passwordHash: hashPassword,
       role: "ADMIN",
     },

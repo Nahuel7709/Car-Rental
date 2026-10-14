@@ -690,3 +690,33 @@ It has one state object with the 12 fields as strings, because inputs always ret
 - In useAuth I added an authError state. I moved the session check out of the useEffect into its own function, checkSession, so it can be called again from a "Try again" button. It clears the previous error and sets loading to true before checking, and in the catch it saves an error message. I wrapped it in useCallback so it's always the same function and can go in the useEffect dependencies without creating an infinite loop, the same as getCars in useCars. I added authError and checkSession to the context type.
 - In RequireAdmin I added a check for authError after loading and before checking the user. If I put it after the user check, a null user would still redirect to the login before the error is seen. When there's an error it shows my ErrorMessage component with checkSession as the retry action.
 - In the Header, handleLogout now has a try/catch: if the logout fails it saves a message in a logoutError state instead of letting the error go unhandled. Claude designed the red banner under the header that shows it, with a button to dismiss it.
+
+
+# Challenge 8
+
+## Part 0: fixes ported from the other project
+
+- Broken JSON in a request body now returns 400 "Invalid JSON" and is never logged, so a password can't end up in the logs.
+- The admin seed validates name, email and password with the same Zod schema as register before the upsert. If the variables are invalid it stops and changes nothing.
+- Added the missing limits to the schemas: max 50 for the name and max 64 for the login password.
+
+## Before coding
+
+- What is the difference between a unit test and an integration test? Which kind are you writing here, and why?
+  A unit test checks a small piece of code, like a function, in isolation, without a database or network. An integration test checks several pieces working together: in this case, an HTTP request that goes through the router, the middlewares, the controller, Prisma and the database. For this task I'm writing integration tests, because the most important parts of my backend live in the connection between those pieces: that the authMiddleware stops the request with 401 before the controller, that requireAdmin returns 403, that Postgres rejects a duplicated email and the API turns it into a 409. A unit test of the controller can't check that without faking everything else.
+
+- Why do the tests need their own database? What could go wrong if they used the development one?
+  Because tests create and delete data: they register users, create cars and empty the tables before each test to start clean. If they used the development database, they would delete my data (the seeded cars, the admin) and fill it with test users. The results would also be unpredictable, because they would depend on whatever data is loaded at that moment. And if that database were ever the production one, real data would be lost.
+
+- What makes a test reliable? How will you make sure each test does not depend on the result of another one?
+  A test is reliable if it passes or fails only because of the code it checks: it always gives the same result, alone or with the others, in any order and as many times as needed. To get that:
+  - the tests use a separate database;
+  - before each test I empty the tables in a beforeEach, and each test creates in its Arrange only what it needs;
+  - I never write ids by hand, because the autoincrement doesn't go back to 1 after deleting rows, so I use the id returned by the response;
+  - test files run one at a time (fileParallelism: false), because they share the database and in parallel they would interfere with each other.
+
+- How will a test act as a logged-in admin or customer without going through the frontend?
+  First the user has to exist. I can create a customer with POST /auth/register, but not an admin, because register always creates a CUSTOMER (and I test that too). So I create users directly in the database with Prisma, with the password hashed with argon2, from a helper function. Then I log in through the API and use a Supertest agent, which stores the cookie returned by the login and sends it automatically in the next requests, like a browser. For specific cases, like a modified token, I send the cookie by hand with .set("Cookie", ...).
+
+- Of everything the API does, which cases matter most to test, and why?
+  The most important ones are the security rules: no session returns 401, a CUSTOMER can't create cars (403), register ignores role: "ADMIN", a modified token doesn't work, and no response includes the passwordHash. A bug there isn't a visual bug, it's a security hole, and it doesn't show up when using the app normally: it only appears if someone looks for it on purpose. After that come the main flows (register, log in, see and create cars) and the validations: invalid data, the same email with different uppercase letters, and invalid or huge ids.

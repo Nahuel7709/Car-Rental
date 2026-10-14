@@ -15,6 +15,19 @@ app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
 
 app.use(express.json());
 
+app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
+  if (
+    err instanceof SyntaxError &&
+    "status" in err &&
+    err.status === 400 &&
+    "body" in err
+  ) {
+    res.status(400).json({ message: "Invalid JSON" });
+    return;
+  }
+  next(err);
+});
+
 app.use(cookieParser());
 
 app.use("/cars", carsRouter);
