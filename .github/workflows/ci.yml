@@ -1,0 +1,15 @@
+name: CI
+on: [push, pull_request] # event
+jobs:
+  test: # job
+    runs-on: ubuntu-latest # runner
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4 # action: download the code
+      - uses: actions/setup-node@v4 # action: installs node
+        with:
+          node-version: 24
+      - run: npm ci # step
+      - run: npm test
