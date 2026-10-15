@@ -1,4 +1,5 @@
 # Car Rental
+![CI](https://github.com/Nahuel7709/Car-Rental/actions/workflows/ci.yml/badge.svg)
 
 A car rental web app built with React, TypeScript and Express. It displays a catalogue of cars available for rental, stored in a PostgreSQL database and served by the backend through a REST API. Users can register, log in and log out. Authentication uses a JWT stored in an httpOnly cookie, and there are two roles: CUSTOMER (the default) and ADMIN, which is the only one allowed to add new cars.
 
