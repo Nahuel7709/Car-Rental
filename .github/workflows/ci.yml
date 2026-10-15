@@ -28,4 +28,7 @@ jobs:
         with:
           node-version: 24
       - run: npm ci # step
+      - run: npx prisma generate
+      - run: npm run typecheck
+      - run: npx prisma migrate deploy
       - run: npm test
