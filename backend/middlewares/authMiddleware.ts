@@ -14,7 +14,7 @@ export async function authMiddleware(
     return;
   }
 
-  let userId: number;
+  let userId: string;
 
   try {
     const payload = jwt.verify(token, JWT_SECRET);
@@ -22,7 +22,7 @@ export async function authMiddleware(
       res.status(401).json({ message: "Invalid cookie" });
       return;
     }
-    userId = Number(payload.sub);
+    userId = payload.sub;
   } catch {
     res.status(401).json({ message: "Invalid cookie" });
     return;
@@ -40,4 +40,3 @@ export async function authMiddleware(
   res.locals.user = user;
   next();
 }
-

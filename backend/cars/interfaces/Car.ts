@@ -3,7 +3,7 @@ export type VehicleType = "Sedan" | "SUV" | "Family car" | "Station wagon";
 export type Category = "Economy" | "Premium" | "Luxury";
 
 export interface Car {
-  id: number;
+  id: string;
   imageUrl?: string;
   brand: string;
   model: string;
