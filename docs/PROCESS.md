@@ -547,3 +547,233 @@ I also needed AI to explain the initial Prisma setup to me, and I did it myself 
 it went, because I found that a bit confusing too.
 
 Also help me with the config to do the lint typecheck and build.
+
+# Challenge 7
+
+## Before coding
+
+### Explain the difference between authentication and authorization.
+
+Authentication is the page knowing who you are and your necessary data. Authorization is the page knowing if you have permission or not to do a certain action based on who you are.
+
+### Explain why passwords must never be stored directly.
+
+Because if we store a password directly in plain text, we run the risk that if our database leaks, all the users' passwords leak too, and this would be very serious because anyone who had access to our database has access to the users. And not only that, users often use the same password for several applications, banks, whatever, and because of our page we could end up giving attackers access to users' banks or other things.
+
+### Explain what password hashing is.
+
+Password hashing is when, instead of storing the password in plain text in our db, before storing it we convert it into a more complex text that is equivalent to the password. But it doesn't end here, because if we leave it like that, the attacker can find out the hash equivalent of a password, and if more users have that password they get access to more and more. In fact, nowadays there are ways to know the hash equivalents of a lot of passwords, so all it takes is for the db to leak, the attacker reads the hashes and looks them up to get access to each one. That's why, besides hashing, what we do is add a salt. A salt is a random piece that is added to the password before the hash, so a hash is never equal to another one even if they have the same password. It also helps a lot for the algorithm to be slower, like bcrypt or argon2 and not SHA-256, because if it's slower it costs the attacker much more time and resources to check those of millions of users, while for a user it's instant. To log in, the password the user entered in the login is hashed and the new hash is compared against the stored hash, if they are equal the user gets in.
+
+### Explain the difference between 401 and 403.
+
+401 is Unauthorized, which means you are not authenticated and you need to authenticate for that request. On the other hand, 403 is Forbidden, which means that based on your credentials you don't have permission to make that request.
+
+### Explain why the backend must check permissions.
+
+Because otherwise anyone who creates an account in the application would have a free pass to make any request, and many times we don't want this. For example, here in car-rental we don't want just anyone to be able to create a car, so what we do is check their credentials, and if they meet certain requirements they can make that request or not. It's important that the back does it because it's not enough to just do it from the front, since people can make requests through Postman, curl, etc, and if our back isn't prepared to handle permissions, anyone could do whatever they want.
+
+### Decide what belongs inside the authentication token.
+
+Inside the token payload there will be the sub, which is the user id, iat, when the token was issued, and exp, when it expires. I saw that some people put the role, but I thought it was better to leave it out, because if we change the user's role, the user would keep that role until the token expires, and I don't think that's correct. I know that in exchange I have the cost of making a query to the database per protected request, but it's a trade-off that I think is right in exchange for security and practicality.
+
+### Explain why an HTTP only cookie is safer than exposing the token to JavaScript.
+
+Because if I expose the token to JavaScript, I run the risk that, if I suffer an XSS attack, in which an attacker manages to inject code into my page, they can get the token, read it and do whatever they want with it until it expires. On the other hand, with an HTTP only cookie, the one that provides the token is the browser, it will never be found in the front's code and it is attached to the requests. This is much safer, but we also have to be careful with CSRF attacks, which is an attack in which another malicious site makes the victim's browser send a request to our page where the user is already logged in, and since the browser attaches cookies automatically, the request goes out with the victim's identity. But this can be solved easily by setting the cookie to Strict so the cookie is never sent in requests that originate from another site, or Lax for requests that only navigate to our site.
+
+### Decide how the current user is restored after a page refresh.
+
+When the user state is lost, the front makes the request to GET auth/me again, in which the browser provides the available cookie again, which survives the refresh. The backend verifies the JWT that the cookie contains, looks for the user and responds with a JSON in the body, ready for the front to know the logged in user.
+
+### Explain why registration must not allow someone to select ADMIN.
+
+Because this way any user could be ADMIN, even users we don't want to be. By default all users should be created as normal users, because it's not enough to just hide this option in the front, someone can select admin through Postman or a curl, so we let the role always be created by the back and it never reads it from the request. The main admin user can be created by hand through a seed in a safe way and without committing it. Then users with specific roles can be made through invitations or be assigned later in the app by someone with permissions.
+
+## Process:
+
+- I started by adding to the Prisma schema the Role enum that contains ADMIN and CUSTOMER, and I created the user table with its columns, in which the email is unique and the role defaults to CUSTOMER, for the reasons I explained before in Before coding. I ran the migration and we can see that it created the User table, the enum and the index for email, since it's unique and it will have to compare it with all the existing values every time a new one is inserted.
+- I installed argon2. I used this library because I looked it up and it's the one currently recommended by OWASP. I installed it before creating the seed for the admin user, since the seed is going to use it to hash the password. I created seed-admin, which inserts a user with the admin role into the db. This made me rename the existing seed to seed-cars so I could tell them apart. I decided to keep them separate so that if you only need to insert the admin user, you don't have to delete all the cars and seed them again, which is what our seed-cars does. To make the admin seed safe, the admin's "body" is taken from the environment variables, the password is hashed, the email is normalized and it's inserted with an upsert so there is idempotency, meaning that no matter how many times I run the seed, the result is the same. Also, if a variable is missing, it throws an error.
+
+Up to this point I think I did a good job. I was able to rely a lot on the Prisma documentation to update the schema and run the migration. What was hardest for me was making the seed, I had a hard time understanding where to put it in relation to the cars seed, but after separating them I understood the syntax much better. In general I got a bit tangled up in this part of the seed. I wrote it using the documentation and asked Claude to point out what was wrong, and I had the idea of separating the 2 seeds into different files, not only for the practical reason I mentioned but because it helped me understand it much better.
+
+Continuing the challenge, the next thing I did before starting to create the backend routes for auth was to organize the backend folder structure a bit better, since I'm going to implement Routes and Controllers. First I created a cars folder, where I put its interface and the mapper function, and there I created carsController and carsRouter. The cars router is the file where, based on a prefix, the different routes that can exist with that prefix are defined, and each one points to the function that handles it. The logic of each route lives in the controller. In the index there is only each prefix with its router (a group of routes).
+
+It helped me to imagine it like when you call a bank, a hospital or some other service. An operator answers (the index) and asks what you need help with: press 1 for payments, press 2 for cards, press 3 for loans (the index with the different prefixes). Inside each option there is another menu (the router). For example, if you press 1 for payments: press 1 to learn how to make a payment, press 2 if your payment was rejected. And when you choose one of those options, you finally talk to the person who actually solves your problem (the controller). The operator and the menus only send you to the right place, but the one who does the work is the person at the end.
+
+Now I created the auth route with its own folder that contains authController and authRouter. Inside authRouter I created the first route, POST /register. In the controller for this route I use Zod to validate the body that the client sends. I installed Zod and validate the body with a Zod schema using safeParse. safeParse always returns an object, so if its success property is false, I return a 400 with the message of the first issue in result.error.issues.
+
+The schema checks that the name has at least 3 characters (after trimming it), that the email is a valid email, and that the password has between 8 and 64 characters. I didn't add composition rules (uppercase, numbers, symbols) because OWASP currently recommend focusing on length instead, since those rules push people to predictable passwords like "Password1!". The maximum is there so nobody can send a huge text and make argon2 spend a lot of time hashing it.
+
+Then I take the validated data from result.data (never from req.body) in 3 variables: the password to hash it with argon2 and the email to normalize it (lowercase and trim). I never read the role from the body, so every new user gets the default CUSTOMER role. Also, Zod removes any field that is not in the schema, so if someone sends "role": "ADMIN" from Postman, it doesn't even reach result.data. I tested it and the user was created as CUSTOMER.
+
+Then, inside a try/catch, I create the user in the db with that data and return a 201 with only id, name, email and role, using select, so the passwordHash is never sent to the front. In the catch, if the error is a P2002 (unique email already exists) I return a 409 saying the email is already in use. If it's any other error I throw it again, so it reaches the error handler and becomes a 500. This difference is needed because if I don't catch the P2002 separately it would be treated as a 500, as if it were a server error, and it isn't. And if I caught every error as a 409, a real problem like the database being down would be hidden behind an "email already in use" message.
+
+The next thing I do is create the route and the controller for login. In the controller I create a Zod schema to check that the user sent an email that is a valid email and a password that is a string (here it isn't necessary to check the length, since what matters is whether it matches or not). Then I create the controller function, where I get the req.body with the schema I created and destructure it. After that I normalize the email for the comparison. I look for the user by the email they sent with findUnique and store it in a constant. If it doesn't exist I return an error. To compare them I use argon2.verify, not argon2.hash. The saved hash already contains the salt that was used to create it, so verify takes that same salt, hashes the password the user entered with it and checks if the result matches. If I created a new hash instead, argon2 would use a new random salt and the result would be different even with the right password. If they don't match I return the same generic error (this is on purpose, since we want to give as little information as possible about why the login wasn't successful). If they match, for now I return a 200 status and a json with the id, name, email and role.
+
+The next thing I have to do is that, when the credentials are valid, besides returning the json I have to return a cookie with a token, so we know at all times who the user is, since HTTP is stateless. So I install jwt, create a token that expires in 12h and then return a cookie with the token inside, with all its configuration.
+
+As a next step I'm going to create an authentication middleware to verify who the user is, so we know whether they can make a given request or not. The first thing I do is install cookie-parser and add it as a middleware in index.ts; this lets us read cookies, which is how we get each user's token.
+Then I create a config.ts file inside auth, where I move the jwt_secret validation and create the cookie options, so instead of copying those things in several places we import them from that file.
+
+In the authMiddleware, what we do is read the cookie. First we get it with req.cookies.token; if it's not a string we return a 401 saying invalid cookie. Then, inside a try/catch with jwt.verify, we access the payload of the token stored in that cookie. If it has no payload.sub or it's a string, we return 401; otherwise we store the sub converted to a number in a variable, which is the user's id. With that id we do a findUnique to look for the user with that id. If it doesn't find one, I return a 401 with user not found; if it does, it stores everything we put in the select ({ id: true, name: true, email: true, role: true }) in res.locals.user, and after that it calls next() to hand control to the next function in the route.
+
+With the middleware ready, I add the GET /auth/me route, which first goes through the authMiddleware, and then the me controller returns whatever was stored in res.locals.user.
+
+After this I add the logout route. The logic in its controller is a simple res.clearCookie("token", cookieOptions) to delete the cookie, using the same config it was created with, and a res.status(204).end() to indicate it was successful and there's nothing to return.
+
+Now I create another middleware, requireAdmin, which checks whether the role of the user in locals is ADMIN. If it isn't, it returns a 403 not allowed; if it is, it lets the request continue.
+
+The next thing I do is start working on the create a car route. I create the createCar controller, where I validate the body with the schema I created for this. If it's not a success, it responds with a 400 and the first error's message; if it is, it inserts the car into the db and returns it using the toApiCar function. I add the route with the controller and, in between, the previously created requireAdmin middleware, which verifies the user is an admin before they can access this route. But to use requireAdmin you need the authMiddleware, which gets the user's info and stores it in locals, so I also place it before requireAdmin.
+
+Ok, now with the backend ready I move on to the frontend. First, I create the User interface, which describes what the backend returns. In the api folder I create auth.ts, with an async function whose return type is User or null. Inside this function I do the fetch to auth/me to get the user's data. If the status is 401 I stop with a return null; otherwise I return the data. The next thing I do is create the AuthContext, which is the channel to share the state; the AuthProvider, which is what puts the state into the channel; then useAuth, which holds the state and decides when to request the data; and index.ts, which is the barrel file. Finally I wrap the app with the provider, all following the same logic we had used for the cars provider.
+The next thing I do is create the fetch to the login POST for when the user logs in. I do it in api/auth with a loginRequest function. Then, in the useAuth hook that manages the user state, I create a login function that calls loginRequest and sets the user in the state if it succeeds.
+
+Going back to fetchMe, there are two details that matter. The fetch has credentials: "include", because the frontend and the backend are on different origins (5173 and 3000), and without it the browser doesn't send the cookie. And the 401 is handled before the !res.ok check: a 401 on /auth/me isn't an error, it just means there's no session, so I return null. Any other failed status does throw an error, because that one is something actually broken.
+
+In useAuth, loading starts as true, not false. On the first render /auth/me hasn't been called yet, because the useEffect runs after the render, so the honest answer at that moment is "I don't know yet". If loading started as false, the app would think there's no session and could send a logged-in user to the login page. The useEffect has an empty dependency array so it runs only once, when the app mounts, and setLoading(false) is in the finally so it runs even if the backend is down. The context starts as undefined and the useAuthContext hook throws an error if it receives it. That way, if someone uses it outside the provider, they get a clear error instead of a silent bug.
+
+For loginRequest it was my first POST from the frontend. It needs method POST, the Content-Type header so express.json() can read the body, the body with JSON.stringify, and credentials: "include", because without it the browser ignores the Set-Cookie and the session never starts. If the response isn't ok, I read the message that my backend sends (for example "Invalid credentials") and throw an error with it. In the hook, login has no try/catch on purpose, so the error goes up to the form, which is where it can be shown.
+
+In the LoginPage I made a mistake that TypeScript didn't catch: I called useAuth() instead of useAuthContext(). useAuth creates a new, independent copy of the state, so the login was updating a copy that only existed in that page, and the rest of the app never found out. The rule I took from this is that only the AuthProvider calls useAuth, and everything else reads the context. The form uses e.preventDefault() so the page doesn't reload, a try/catch to show the error message, and navigates to /cars if the login succeeds.
+
+For the registration I decided to log the user in automatically after signing up, for the user's convenience. registerRequest returns Promise<void>: the backend does return the created user, but I don't use it, because right after that I call login, which already returns the user and also sets the cookie. In the hook, register awaits registerRequest and then awaits login. At first I forgot the second await, and that meant the form considered the registration finished before the login ended, and if the login failed nobody would catch the error.
+
+For the logout I created logoutRequest, a POST to /auth/logout with credentials so the cookie is sent and can be deleted. It doesn't read the body because the backend answers 204 with no content. In the hook, logout calls it and then does setUser(null), so the frontend also forgets the user. In the Header I show different things for the three states: nothing while loading (so "Log in" doesn't flash before we know), Log in and Sign up links when there's no user, and the user's name with a Log out button when there is one. Here I learned that <Navigate /> is a component that only works when it's rendered, so inside an event handler I have to use the useNavigate hook.
+
+For the forms, I wrote the logic and Claude helped me with the styling so it matches the rest of the app. We also replaced the browser's native validation popup with our own validation, which shows the errors in red under each field. That validation is only for convenience: the real validation is still Zod in the backend, because anyone can skip the frontend with Postman. The downside is that the rules are duplicated, so if I change them in Zod I also have to change them in the frontend.
+
+To protect the admin page I created a RequireAdmin component, used as a layout route that renders an <Outlet />. It works like the backend middlewares but in React, with early returns: while loading it shows a loading message, if there's no user it returns <Navigate to="/login" replace />, if the user isn't an ADMIN it redirects to /cars, and only if everything passes it renders the <Outlet />. The order matters: if I checked the user before loading, an admin who reloads /admin would be sent to the login page, because on the first render the user is still null. Here I use <Navigate /> and not navigate() because I'm returning JSX during the render, which is the opposite case from the Header. I also made two mistakes here: I wrote !user.role === "ADMIN", which compares a boolean with a string and is always false (TypeScript caught it, the right operator is !==), and I left "/signin" copied from an example, a route that doesn't exist in my app. This protected route is only for convenience: if it had a bug and a CUSTOMER reached the form, the backend would still answer 403.
+
+For creating cars I realized that what the frontend sends isn't a Car. The Car type has the display values that toApiCar returns ("Sedan"), but the backend's Zod schema expects the Prisma enum values ("SEDAN"). So I created a separate CreateCarInput type, without the id, with the enums in uppercase (VehicleTypeValue, CategoryValue and GearboxValue, named differently so they don't get confused with the ones in Car.ts). Then I created createCarRequest, a POST to /cars with credentials so the cookie is sent. The first version had JSON.stringify({ car }), which wrapped the car inside another object, so Zod couldn't find any of the fields and always answered 400. It also threw "Error 400" instead of reading the message the backend sends.
+
+It has one state object with the 12 fields as strings, because inputs always return strings, and a single handleChange that uses [e.target.name] to update the field that changed. When submitting, it converts the numbers with Number(), sends imageUrl as undefined if it's empty (Zod accepts the field not being there, but an empty string isn't a valid URL), and uses "as" for the enums, which is safe because those values can only come from the select options. It has the same kind of frontend validation as the other forms, with the same rules as the backend schema. If the car is created it shows a success message and resets the form, and the new car appears in /cars because CarsPage requests the list again every time it mounts. Finally, the Header shows an "Add car" link only when the user is an ADMIN, which again is just UI: the real protection is in the backend.
+
+## After review corrections:
+
+### 1. Admin seed with an email that already exists
+
+**What was wrong:** if a customer registered with an email and then the admin seed was run with that same email, the script said the admin was created, but the account stayed a customer and its password was replaced.
+
+**Why it happened:** the seed used an upsert, which only decides based on whether the email exists or not. It can't check the role before updating, so when the email existed it went straight to the update and replaced the passwordHash, without changing the role. And the log message was always the same, so the script said everything went fine even when it didn't.
+
+**What I decided:** there are three cases. If the email doesn't exist, the admin is created. If it exists and is already an ADMIN, the password is updated with the one from the .env, because the .env is the source of truth for the admin and if someone changed ADMIN_PASSWORD it's because they want to rotate it. If it exists and is not an ADMIN, the script stops with an error and doesn't change anything, because promoting that account could give admin permissions to someone who registered with that email first, and changing its password would break that person's account.
+
+**How I fixed it:** before the upsert I look for the user with findUnique, selecting only the role. If the user exists and its role is not ADMIN, I throw an error before touching the database. I check "not ADMIN" instead of "is CUSTOMER" so that if a new role is added in the future it's protected too. I also moved the argon2 hash after that check, so it's only calculated when it's going to be used, and the final log now says "created" or "updated" depending on whether the user existed. While fixing it I made a mistake worth writing down: I first wrote user?.role !== "ADMIN", but when the user doesn't exist that gives undefined !== "ADMIN", which is true, so the seed couldn't create the admin at all. The condition needs both parts: user && user.role !== "ADMIN".
+
+### 2. Spaces around the email
+
+**What was wrong:** the frontend form accepted an email with spaces around it, but the backend rejected it with a 400, both in signup and login. The two sides weren't consistent.
+
+**Why it happened:** the order. Zod validated the email with z.email() first, and the normalization (toLowerCase and trim) happened afterwards, in the controller. So " myemail@mail.com " was rejected as an invalid email before the code could remove the spaces. Meanwhile, the frontend validation trims the email before checking it, so it let it through.
+
+**How I fixed it:** I moved the normalization inside the Zod schemas, before the validation, using .pipe(). The email is first a string, then it's trimmed and lowercased, and only then the clean value is passed to z.email() to be validated. I did it in both schemas, register and login, so they behave the same. Since result.data.email now comes already normalized, I removed the normalizedEmail lines from the controllers, because normalizing twice would be dead code and could make someone think it's still needed. The frontend keeps sending the email as the user typed it, and that's fine: the backend is the one that has to clean it, because it can't trust that the frontend did.
+
+### 3. Very large numbers in the car form and in car IDs
+
+**What was wrong:** some very large numbers passed both the car form and the backend validation, but couldn't be saved in the database. For example, a price of 2147483648 gave a 500 error. Large car IDs in GET /cars/:id had the same problem.
+
+**Why it happened:** the Int columns in Prisma are INTEGER in PostgreSQL, which uses 4 bytes, so the biggest value it can store is 2147483647. But z.int() in Zod only checks that the number is a safe integer in JavaScript, which goes much higher. So there was a gap: numbers between those two limits passed Zod and then the database rejected them. For the IDs, the regex only checked that the id had digits, without any limit on how many.
+
+**What I decided:** I added realistic maximums to every number in the car schema, leaving some room for outliers: price per day up to 200000 (the most expensive car in the seed is 18900), up to 30 seats, up to 20 bags and 20 suitcases, and a minimum age between 18 and 50. Besides fixing the database error, these limits also catch typos, like an admin adding an extra zero to a price. For a car ID that is too big I return a 400 and not a 404, because the problem is that the id is badly formed, not that the car doesn't exist.
+
+**How I fixed it:** in the backend I added a .max() to each number in the Zod schema, and in getCarById I check the id against a MAX_INT constant (2147483647) and return a 400 before calling the database. In the frontend I added the same limits to the admin form validation, so each field shows "X is required" if it's empty and "X must be between A and B" if it's out of range. Since the rules are duplicated, if I change a limit in Zod I also have to change it in the form.
+
+### 4. When the backend is unavailable
+
+**What was wrong:** with the backend down, refreshing the admin page sent me to the login page without telling me that the app couldn't check my account. Clicking Log out did nothing, with no error on the page.
+
+**Why it happened:** my app had three session states: loading ("I don't know yet"), user is null ("I know there's no session") and user with data ("I know there is a session"). But there's a fourth case: "I couldn't find out". fetchMe already told them apart (it returns null on a 401 and throws on anything else), but the catch in useAuth did setUser(null) in both cases, so "the server is down" ended up looking exactly like "you're not logged in". RequireAdmin saw a null user and redirected to the login. For the logout, the hook let the error go up on purpose, but the Header didn't catch it, so nobody handled it.
+
+**What I decided:** a failed check is not the same as having no session, so it needs its own state and its own message, plus a way to try again. When the logout fails, the user is still logged in (the cookie wasn't deleted), so I keep them logged in and show an error; trying again is just clicking Log out again.
+
+**How I fixed it:**
+
+- In useAuth I added an authError state. I moved the session check out of the useEffect into its own function, checkSession, so it can be called again from a "Try again" button. It clears the previous error and sets loading to true before checking, and in the catch it saves an error message. I wrapped it in useCallback so it's always the same function and can go in the useEffect dependencies without creating an infinite loop, the same as getCars in useCars. I added authError and checkSession to the context type.
+- In RequireAdmin I added a check for authError after loading and before checking the user. If I put it after the user check, a null user would still redirect to the login before the error is seen. When there's an error it shows my ErrorMessage component with checkSession as the retry action.
+- In the Header, handleLogout now has a try/catch: if the logout fails it saves a message in a logoutError state instead of letting the error go unhandled. Claude designed the red banner under the header that shows it, with a button to dismiss it.
+
+
+# Challenge 8
+
+## Part 0: fixes ported from the other project
+
+- Broken JSON in a request body now returns 400 "Invalid JSON" and is never logged, so a password can't end up in the logs.
+- The admin seed validates name, email and password with the same Zod schema as register before the upsert. If the variables are invalid it stops and changes nothing.
+- Added the missing limits to the schemas: max 50 for the name and max 64 for the login password.
+
+## Before coding
+
+- What is the difference between a unit test and an integration test? Which kind are you writing here, and why?
+  A unit test checks a small piece of code, like a function, in isolation, without a database or network. An integration test checks several pieces working together: in this case, an HTTP request that goes through the router, the middlewares, the controller, Prisma and the database. For this task I'm writing integration tests, because the most important parts of my backend live in the connection between those pieces: that the authMiddleware stops the request with 401 before the controller, that requireAdmin returns 403, that Postgres rejects a duplicated email and the API turns it into a 409. A unit test of the controller can't check that without faking everything else.
+
+- Why do the tests need their own database? What could go wrong if they used the development one?
+  Because tests create and delete data: they register users, create cars and empty the tables before each test to start clean. If they used the development database, they would delete my data (the seeded cars, the admin) and fill it with test users. The results would also be unpredictable, because they would depend on whatever data is loaded at that moment. And if that database were ever the production one, real data would be lost.
+
+- What makes a test reliable? How will you make sure each test does not depend on the result of another one?
+  A test is reliable if it passes or fails only because of the code it checks: it always gives the same result, alone or with the others, in any order and as many times as needed. To get that:
+  - the tests use a separate database;
+  - before each test I empty the tables in a beforeEach, and each test creates in its Arrange only what it needs;
+  - I never write ids by hand, because the autoincrement doesn't go back to 1 after deleting rows, so I use the id returned by the response;
+  - test files run one at a time (fileParallelism: false), because they share the database and in parallel they would interfere with each other.
+
+- How will a test act as a logged-in admin or customer without going through the frontend?
+  First the user has to exist. I can create a customer with POST /auth/register, but not an admin, because register always creates a CUSTOMER (and I test that too). So I create users directly in the database with Prisma, with the password hashed with argon2, from a helper function. Then I log in through the API and use a Supertest agent, which stores the cookie returned by the login and sends it automatically in the next requests, like a browser. For specific cases, like a modified token, I send the cookie by hand with .set("Cookie", ...).
+
+- Of everything the API does, which cases matter most to test, and why?
+  The most important ones are the security rules: no session returns 401, a CUSTOMER can't create cars (403), register ignores role: "ADMIN", a modified token doesn't work, and no response includes the passwordHash. A bug there isn't a visual bug, it's a security hole, and it doesn't show up when using the app normally: it only appears if someone looks for it on purpose. After that come the main flows (register, log in, see and create cars) and the validations: invalid data, the same email with different uppercase letters, and invalid or huge ids.
+
+## Process
+
+### Steps
+1. Split the Express app into `app.ts` (creates and exports the app) and `index.ts` (calls `listen`), so tests can import the app without starting a server.
+2. Installed Vitest, Supertest and dotenv-cli, and added the `test` script.
+3. Set up a separate test database in a Docker Postgres container and applied the migrations with `prisma migrate deploy`.
+4. Added a setup file that loads `.env.test` and a guard that stops the run if the database is not the test one.
+5. Wrote the auth tests (register, login, /auth/me, logout) and then the cars tests (list, detail, create with each role).
+6. Moved the repeated Arrange into helpers (`createTestUser`, `loginAs`, `createTestCar`).
+7. Added a test for broken JSON bodies.
+
+### Decisions
+- **Docker instead of Supabase for the test DB:** the Supabase test project stayed stuck while starting, so I used a local Postgres container. It is faster and does not depend on the internet.
+- **Setup file loads `.env.test` first:** dotenv does not override variables that already exist, so loading the test file first guarantees the test `DATABASE_URL` wins.
+- **Safety guard:** if `DATABASE_URL` does not contain `car_rental_test`, the run throws before touching any data.
+- **`fileParallelism: false`:** test files share one database, so they run one after another to avoid one file deleting another file's data.
+- **Clean tables in `beforeEach`:** each test starts from an empty database. Children are deleted before parents. Ids are never hardcoded because autoincrement does not reset.
+- **Admin created with Prisma in the helpers:** register always creates CUSTOMER, so the admin is inserted directly with an argon2 hash. The seed script was not reused because it runs on import, reads env vars and disconnects Prisma.
+- **`request.agent(app)` for sessions:** the agent keeps the cookie between requests, like a browser.
+
+### Problems found
+- Tests were importing `index.ts`, which started the server. Fixed with the app/index split.
+- `toEqual` failed when the response had extra fields. Used `toMatchObject` for partial checks.
+- A "modified token" test was not really modifying the token. Fixed by changing the cookie value before sending it.
+- Learned that logout only clears the cookie: a JWT stays valid until it expires because it is stateless. Revoking it would need server state (a revoked list or short-lived tokens with refresh tokens).
+
+### Results
+23 tests passing: 14 in `auth.test.ts`, 9 in `cars.test.ts`.
+
+### Where AI helped
+I used Claude to explain the testing concepts and to guide the setup step by step. I wrote the tests with its review.
+
+
+# Challenge 9 
+
+## Before coding
+
+**1. Your tests use `.env.test` locally, but that file is not in the repo. How does `DATABASE_URL` reach the tests in CI, and why does the safety guard still pass?**
+
+In CI, the workflow defines `DATABASE_URL` and `JWT_SECRET` with `env`, so they already exist in `process.env` before the tests start. The setup file still calls `config({ path: ".env.test" })`, but the file does not exist in the runner, so dotenv loads nothing. Even if it existed, dotenv does not override variables that already have a value. The guard passes because the CI `DATABASE_URL` points to a database called `car_rental_test`, the one created by the Postgres service container.
+
+**2. Why do we need a health check on the Postgres service? What could happen without it?**
+
+The container starts quickly, but Postgres needs a few seconds to be ready to accept connections. Without a health check, the job could start running the migrations or the tests while the database is still starting, and they would fail with a connection error even if the code is fine. With the health check, GitHub Actions waits until Postgres answers before running the steps.
+
+**3. Why `npm ci` and not `npm install` in the pipeline?**
+
+`npm ci` installs exactly the versions in `package-lock.json`, starting from a clean `node_modules`, and fails if the lock file does not match `package.json`. `npm install` can resolve newer versions inside the ranges of `package.json` and rewrite the lock file. In CI we want the same dependencies that were tested locally, so the result is reproducible.
+
+**4. The generated Prisma client is not committed. What would fail if you skip the generate step, and at which step would it fail?**
+
+The code imports the Prisma client and the enums from the generated folder. If the client is not generated, those imports point to files that do not exist. The first step to fail would be the typecheck, because `tsc` cannot resolve the module and its types. If there was no typecheck, the tests would fail when Vitest tries to import the app.
+
+**5. Which values in the workflow are safe to write in plain text, and which would need a secret? Why?**
+
+The CI `DATABASE_URL` is safe in plain text: it points to a temporary database that only exists inside the runner while the job runs, and it has no real data. The test `JWT_SECRET` is also safe, because it only signs tokens for the tests and is different from the production one. Anything that gives access to a real system needs a secret: production database credentials, the production `JWT_SECRET`, API keys or deploy tokens. The workflow file is part of the repo, so anyone who can read the repo can read it.

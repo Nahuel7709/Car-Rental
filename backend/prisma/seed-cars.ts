@@ -1,6 +1,6 @@
 import { prisma } from "../db/prisma.ts";
 
-async function main() {
+async function seedCars() {
   await prisma.$executeRawUnsafe('TRUNCATE "Car" RESTART IDENTITY;');
 
   const result = await prisma.car.createMany({
@@ -204,9 +204,10 @@ async function main() {
   });
 
   console.log(`Seed completed: ${result.count} cars created`);
+
 }
 
-main()
+seedCars()
   .then(async () => {
     await prisma.$disconnect();
   })
@@ -215,3 +216,5 @@ main()
     await prisma.$disconnect();
     process.exit(1);
   });
+
+

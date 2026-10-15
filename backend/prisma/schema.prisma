@@ -30,6 +30,11 @@ enum Category {
   LUXURY
 }
 
+enum Role {
+  ADMIN
+  CUSTOMER
+}
+
 model Car {
   id               Int         @id @default(autoincrement())
   brand            String
@@ -44,4 +49,14 @@ model Car {
   suitcaseCapacity Int
   gearbox          Gearbox
   ageRequired      Int
+}
+
+model User {
+  id               Int @id @default(autoincrement())
+  name             String
+  email            String @unique
+  role             Role @default(CUSTOMER)
+  passwordHash     String
+  createdAt        DateTime   @default(now()) 
+  updatedAt        DateTime   @updatedAt
 }
