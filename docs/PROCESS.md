@@ -777,3 +777,14 @@ The code imports the Prisma client and the enums from the generated folder. If t
 **5. Which values in the workflow are safe to write in plain text, and which would need a secret? Why?**
 
 The CI `DATABASE_URL` is safe in plain text: it points to a temporary database that only exists inside the runner while the job runs, and it has no real data. The test `JWT_SECRET` is also safe, because it only signs tokens for the tests and is different from the production one. Anything that gives access to a real system needs a secret: production database credentials, the production `JWT_SECRET`, API keys or deploy tokens. The workflow file is part of the repo, so anyone who can read the repo can read it.
+
+### Steps
+1. Created `.github/workflows/ci.yml` at the repo root, triggered on push and pull request.
+2. Set `working-directory: backend` for the whole job with `defaults`, because the runner starts at the repo root and the backend `package.json` is inside `backend/`.
+3. Set Node 24 (same version I use locally) and installed dependencies with `npm ci`.
+4. Added a PostgreSQL 17 service container with a health check, and defined `DATABASE_URL` and `JWT_SECRET` in the job `env`.
+5. Added the Prisma steps: `prisma generate` and `prisma migrate deploy`, plus `npm run typecheck`.
+6. Added the CI badge to the README.
+7. Merged `challenge-9` to `main` through a pull request, with the CI check green.
+8. Added a ruleset on `main`: pull request required, the `test` check must pass, and force pushes and deletions are blocked.
+9. Updated `actions/checkout` and `actions/setup-node` from v4 to v5 through a pull request, already under the new rules.
