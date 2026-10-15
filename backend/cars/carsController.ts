@@ -4,8 +4,6 @@ import type { Request, Response } from "express";
 import z from "zod";
 import { Category, Gearbox, VehicleType } from "../generated/prisma/enums.ts";
 
-const MAX_INT = 2147483647;
-
 const carSchema = z.object({
   brand: z.string().trim().min(2, "Minimum of 2 characters"),
   model: z.string().trim().min(2, "Minimum of 2 characters"),
@@ -20,6 +18,8 @@ const carSchema = z.object({
   gearbox: z.enum(Gearbox),
   ageRequired: z.int().positive().min(18).max(50),
 });
+
+const carIdSchema = z.uuid();
 
 export async function getCars(req: Request, res: Response) {
   const cars = await prisma.car.findMany({
@@ -42,18 +42,14 @@ export async function createCar(req: Request, res: Response) {
 }
 
 export async function getCarById(req: Request<{ id: string }>, res: Response) {
-  if (Number(req.params.id) > MAX_INT) {
-    res.status(400).json({ message: "Invalid id" });
-    return;
-  }
-  const validIdRegex = /^\d+$/;
-  if (!validIdRegex.test(req.params.id)) {
-    res.status(400).json({ message: "The car id must be a whole number" });
+  const idResult = carIdSchema.safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ message: "Invalid car id" });
     return;
   }
 
   const car = await prisma.car.findUnique({
-    where: { id: Number(req.params.id) },
+    where: { id: idResult.data },
   });
   if (car === null) {
     res.status(404).json({ message: `No car found with id ${req.params.id}` });

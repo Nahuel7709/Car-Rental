@@ -788,3 +788,27 @@ The CI `DATABASE_URL` is safe in plain text: it points to a temporary database t
 7. Merged `challenge-9` to `main` through a pull request, with the CI check green.
 8. Added a ruleset on `main`: pull request required, the `test` check must pass, and force pushes and deletions are blocked.
 9. Updated `actions/checkout` and `actions/setup-node` from v4 to v5 through a pull request, already under the new rules.
+
+# Task 10: Migrate IDs to UUID
+
+## Before coding
+
+**1. Why are UUIDs harder to attack than autoincrement IDs? Does switching to UUID fix IDOR? Why?**
+
+Autoincrement IDs are sequential: if I see `/cars/41`, I know that 40 and 42 probably exist, so I can try them one by one. They also reveal how many records there are. A UUID is a random 128-bit value, so it is practically impossible to guess another valid one, and it does not reveal anything about the data. But it does not fix IDOR. IDOR happens when the server does not check that the record belongs to the user. If someone gets a UUID from somewhere else (a shared link, a log, a screenshot), they can still use it. The fix for IDOR is always the ownership check on the server. UUIDs are only an extra layer that makes guessing harder.
+
+**2. Why UUID v7 instead of v4?**
+
+UUID v4 is completely random, so new rows are inserted in random positions of the primary key index. That fragments the index and makes inserts slower as the table grows. UUID v7 starts with a timestamp, so new IDs are always bigger than the previous ones and are inserted at the end of the index, like autoincrement. It keeps the benefits of a UUID (hard to guess, can be generated anywhere) and the IDs stay ordered by creation time.
+
+**3. Today `GET /cars/999999` returns `404`. What will it return after this change, and why? What do you need to use in the test to get a `404`?**
+
+It will return `400`, because `999999` is not a valid UUID anymore, so the validation rejects it before going to the database. The request is malformed, not a missing resource. To get a `404` the test needs a valid UUID that does not exist in the database, for example a UUID generated in the test or a fixed one like `00000000-0000-7000-8000-000000000000`.
+
+**4. The migration changes the type of a primary key that already has data. Why is it OK to reset the dev database here, and why would it not be OK in production?**
+
+The dev database only has seed data (the admin and the cars), and it can be recreated with the seed scripts, so nothing is lost. In production, resetting means deleting real users and real data. There, the migration would need to keep the data: add a new UUID column, fill it for every row, update the foreign keys that point to the old ID, and only then switch the primary key. That is a multi-step migration and it has to be planned and tested before running it.
+
+**5. `GET /cars` orders by `id`. With UUID v7, what does that order mean? Would it mean the same with v4?**
+
+With UUID v7 the ID starts with the creation timestamp, so ordering by `id` means ordering by creation time, oldest first, the same as with autoincrement. Cars created in the same millisecond can come in any order between them. With v4 the order would be random and would not mean anything, so we would need a `createdAt` column to order by. With v7 I keep ordering by `id`.

@@ -45,19 +45,23 @@ describe("GET /cars/:id", () => {
   });
 
   it("returns 404 when the car does not exist", async () => {
-    const res = await request(app).get("/cars/999999");
+    const res = await request(app).get(
+      "/cars/00000000-0000-7000-8000-000000000000",
+    );
 
     expect(res.status).toBe(404);
   });
 
-  it("returns 400 with an id that is not a number", async () => {
+  it("returns 400 with an id that is not a valid UUID", async () => {
     const res = await request(app).get("/cars/abc");
 
     expect(res.status).toBe(400);
   });
 
-  it("returns 400 with an id bigger than the database limit", async () => {
-    const res = await request(app).get("/cars/99999999999");
+  it("returns 400 with a malformed UUID", async () => {
+    const res = await request(app).get(
+      "/cars/00000000-0000-7000-8000-00000000000",
+    );
 
     expect(res.status).toBe(400);
   });

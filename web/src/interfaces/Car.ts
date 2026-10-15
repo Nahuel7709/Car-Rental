@@ -6,7 +6,7 @@ export type VehicleTypeFilter = VehicleType | "All";
 export type CategoryFilter = Category | "All";
 
 export interface Car {
-  id: number;
+  id: string;
   imageUrl?: string;
   brand: string;
   model: string;
