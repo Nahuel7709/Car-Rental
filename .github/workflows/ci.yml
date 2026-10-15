@@ -23,8 +23,8 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4 # action: download the code
-      - uses: actions/setup-node@v4 # action: installs node
+      - uses: actions/checkout@v5 # action: download the code
+      - uses: actions/setup-node@v5 # action: installs node
         with:
           node-version: 24
       - run: npm ci # step
