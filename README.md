@@ -44,6 +44,8 @@ Frontend (runs on http://localhost:5173):
 - copy .env.example to .env (it already points to http://localhost:3000)
 - npm run dev (runs the frontend)
 
+
+
 ## Environment variables
 
 backend/.env (there is a .env.example with all the keys and empty values):
@@ -62,6 +64,29 @@ web/.env (there is a .env.example):
 The .env files are not committed, that is why there are .env.example files.
 
 
+## Running the tests
+
+Tests run against a separate PostgreSQL database in Docker, never against the dev database.
+
+1. Start the test database (first time):
+```bash
+   docker run --name car-rental-test-db -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=car_rental_test -p 5433:5432 -d postgres:17
+```
+   Next times, just start the existing container:
+```bash
+   docker start car-rental-test-db
+```
+2. Create `backend/.env.test` from `backend/.env.test.example` and fill in `DATABASE_URL` and `JWT_SECRET`.
+3. Apply the migrations to the test database:
+```bash
+   npx dotenv -e .env.test -- npx prisma migrate deploy
+```
+4. Run the tests:
+```bash
+   npm test
+```
+
+The setup file loads `.env.test` and stops the run if `DATABASE_URL` does not point to `car_rental_test`.
 
 ## Users and roles
 

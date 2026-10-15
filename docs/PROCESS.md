@@ -720,3 +720,60 @@ It has one state object with the 12 fields as strings, because inputs always ret
 
 - Of everything the API does, which cases matter most to test, and why?
   The most important ones are the security rules: no session returns 401, a CUSTOMER can't create cars (403), register ignores role: "ADMIN", a modified token doesn't work, and no response includes the passwordHash. A bug there isn't a visual bug, it's a security hole, and it doesn't show up when using the app normally: it only appears if someone looks for it on purpose. After that come the main flows (register, log in, see and create cars) and the validations: invalid data, the same email with different uppercase letters, and invalid or huge ids.
+
+## Process
+
+### Steps
+1. Split the Express app into `app.ts` (creates and exports the app) and `index.ts` (calls `listen`), so tests can import the app without starting a server.
+2. Installed Vitest, Supertest and dotenv-cli, and added the `test` script.
+3. Set up a separate test database in a Docker Postgres container and applied the migrations with `prisma migrate deploy`.
+4. Added a setup file that loads `.env.test` and a guard that stops the run if the database is not the test one.
+5. Wrote the auth tests (register, login, /auth/me, logout) and then the cars tests (list, detail, create with each role).
+6. Moved the repeated Arrange into helpers (`createTestUser`, `loginAs`, `createTestCar`).
+7. Added a test for broken JSON bodies.
+
+### Decisions
+- **Docker instead of Supabase for the test DB:** the Supabase test project stayed stuck while starting, so I used a local Postgres container. It is faster and does not depend on the internet.
+- **Setup file loads `.env.test` first:** dotenv does not override variables that already exist, so loading the test file first guarantees the test `DATABASE_URL` wins.
+- **Safety guard:** if `DATABASE_URL` does not contain `car_rental_test`, the run throws before touching any data.
+- **`fileParallelism: false`:** test files share one database, so they run one after another to avoid one file deleting another file's data.
+- **Clean tables in `beforeEach`:** each test starts from an empty database. Children are deleted before parents. Ids are never hardcoded because autoincrement does not reset.
+- **Admin created with Prisma in the helpers:** register always creates CUSTOMER, so the admin is inserted directly with an argon2 hash. The seed script was not reused because it runs on import, reads env vars and disconnects Prisma.
+- **`request.agent(app)` for sessions:** the agent keeps the cookie between requests, like a browser.
+
+### Problems found
+- Tests were importing `index.ts`, which started the server. Fixed with the app/index split.
+- `toEqual` failed when the response had extra fields. Used `toMatchObject` for partial checks.
+- A "modified token" test was not really modifying the token. Fixed by changing the cookie value before sending it.
+- Learned that logout only clears the cookie: a JWT stays valid until it expires because it is stateless. Revoking it would need server state (a revoked list or short-lived tokens with refresh tokens).
+
+### Results
+23 tests passing: 14 in `auth.test.ts`, 9 in `cars.test.ts`.
+
+### Where AI helped
+I used Claude to explain the testing concepts and to guide the setup step by step. I wrote the tests with its review.
+
+
+# Challenge 9 
+
+## Before coding
+
+**1. Your tests use `.env.test` locally, but that file is not in the repo. How does `DATABASE_URL` reach the tests in CI, and why does the safety guard still pass?**
+
+In CI, the workflow defines `DATABASE_URL` and `JWT_SECRET` with `env`, so they already exist in `process.env` before the tests start. The setup file still calls `config({ path: ".env.test" })`, but the file does not exist in the runner, so dotenv loads nothing. Even if it existed, dotenv does not override variables that already have a value. The guard passes because the CI `DATABASE_URL` points to a database called `car_rental_test`, the one created by the Postgres service container.
+
+**2. Why do we need a health check on the Postgres service? What could happen without it?**
+
+The container starts quickly, but Postgres needs a few seconds to be ready to accept connections. Without a health check, the job could start running the migrations or the tests while the database is still starting, and they would fail with a connection error even if the code is fine. With the health check, GitHub Actions waits until Postgres answers before running the steps.
+
+**3. Why `npm ci` and not `npm install` in the pipeline?**
+
+`npm ci` installs exactly the versions in `package-lock.json`, starting from a clean `node_modules`, and fails if the lock file does not match `package.json`. `npm install` can resolve newer versions inside the ranges of `package.json` and rewrite the lock file. In CI we want the same dependencies that were tested locally, so the result is reproducible.
+
+**4. The generated Prisma client is not committed. What would fail if you skip the generate step, and at which step would it fail?**
+
+The code imports the Prisma client and the enums from the generated folder. If the client is not generated, those imports point to files that do not exist. The first step to fail would be the typecheck, because `tsc` cannot resolve the module and its types. If there was no typecheck, the tests would fail when Vitest tries to import the app.
+
+**5. Which values in the workflow are safe to write in plain text, and which would need a secret? Why?**
+
+The CI `DATABASE_URL` is safe in plain text: it points to a temporary database that only exists inside the runner while the job runs, and it has no real data. The test `JWT_SECRET` is also safe, because it only signs tokens for the tests and is different from the production one. Anything that gives access to a real system needs a secret: production database credentials, the production `JWT_SECRET`, API keys or deploy tokens. The workflow file is part of the repo, so anyone who can read the repo can read it.
