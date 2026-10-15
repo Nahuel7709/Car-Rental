@@ -36,7 +36,7 @@ enum Role {
 }
 
 model Car {
-  id               Int         @id @default(autoincrement())
+  id               String         @id @default(uuid(7)) @db.Uuid
   brand            String
   model            String
   year             Int
@@ -52,7 +52,7 @@ model Car {
 }
 
 model User {
-  id               Int @id @default(autoincrement())
+  id               String @id @default(uuid(7)) @db.Uuid
   name             String
   email            String @unique
   role             Role @default(CUSTOMER)
