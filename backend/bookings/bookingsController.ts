@@ -1,9 +1,9 @@
 import type { Request, Response } from "express";
-import z from "zod";
 import { daysBetween, todayInBuenosAires } from "./dates.ts";
 import { prisma } from "../db/prisma.ts";
 import { toApiBooking } from "./mappers/booking.ts";
 import type { Role } from "../generated/prisma/enums.ts";
+import z from "zod";
 
 const bookingWithCarInclude = {
   car: { select: { id: true, brand: true, model: true, imageUrl: true } },
@@ -146,4 +146,49 @@ export async function getBookingById(req: Request, res: Response) {
   }
 
   res.status(200).json(toApiBooking(booking));
+}
+
+//For now it only cancels the booking, but in a future maybe we can use this same endpoint to edit other things such dates etc
+export async function cancelBookingById(req: Request, res: Response) {
+  const user = res.locals.user;
+
+  if (!user) {
+    res.status(401).json({ message: "Session required" });
+    return;
+  }
+
+  const idResult = bookingIdSchema.safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ message: "Invalid booking id" });
+    return;
+  }
+
+  const booking = await prisma.booking.findFirst({
+    where: { id: idResult.data, ...ownershipFilter(user) },
+    include: bookingWithCarInclude,
+  });
+  if (booking === null) {
+    res
+      .status(404)
+      .json({ message: `No booking found with id ${req.params.id}` });
+    return;
+  }
+
+  if (booking.status === "CANCELLED") {
+    res.status(409).json({ message: "Cannot cancel a cancelled booking" });
+    return;
+  }
+
+  const startDateToIso = booking.startDate.toISOString().slice(0, 10);
+  if (startDateToIso < todayInBuenosAires()) {
+    res.status(409).json({ message: "Cannot cancel a started booking" });
+    return;
+  }
+
+  const editedBooking = await prisma.booking.update({
+    where: { id: booking.id },
+    data: { status: "CANCELLED" },
+    include: bookingWithCarInclude,
+  });
+  res.status(200).json(toApiBooking(editedBooking));
 }

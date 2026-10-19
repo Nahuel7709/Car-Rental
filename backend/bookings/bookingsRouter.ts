@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+    cancelBookingById,
   createBooking,
   getBookingById,
   getBookings,
@@ -15,3 +16,5 @@ bookingRouter.post("/", createBooking);
 bookingRouter.get("/", getBookings);
 
 bookingRouter.get("/:id", getBookingById);
+
+bookingRouter.patch("/:id/cancel", cancelBookingById);
