@@ -1,11 +1,11 @@
 import express from "express";
 import cors from "cors";
 
-
 import type { Request, Response, NextFunction } from "express";
 import { carsRouter } from "./cars/carsRouter.ts";
 import { authRouter } from "./auth/authRouter.ts";
 import cookieParser from "cookie-parser";
+import { bookingRouter } from "./bookings/bookingsRouter.ts";
 
 export const app = express();
 
@@ -33,6 +33,8 @@ app.use(cookieParser());
 app.use("/cars", carsRouter);
 
 app.use("/auth", authRouter);
+
+app.use("/bookings", bookingRouter);
 
 app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
   console.error(`[${req.method} ${req.originalUrl}]`, err);
