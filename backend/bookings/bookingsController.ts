@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import z from "zod";
 import { daysBetween, todayInBuenosAires } from "./dates.ts";
 import { prisma } from "../db/prisma.ts";
+import { toApiBooking } from "./mappers/booking.ts";
 
 const bookingSchema = z.object({
   carId: z.uuid(),
@@ -73,6 +74,9 @@ export async function createBooking(req: Request, res: Response) {
         endDate: new Date(data.endDate),
         totalPrice: price,
       },
+      include: {
+        car: { select: { id: true, brand: true, model: true, imageUrl: true } },
+      },
     });
 
     return booking;
@@ -82,5 +86,5 @@ export async function createBooking(req: Request, res: Response) {
     res.status(409).json({ message: "Car already booked" });
     return;
   }
-  res.status(201).json(transactionResult);
+  res.status(201).json(toApiBooking(transactionResult));
 }
