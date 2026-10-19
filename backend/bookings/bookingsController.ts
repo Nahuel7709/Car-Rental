@@ -3,16 +3,27 @@ import z from "zod";
 import { daysBetween, todayInBuenosAires } from "./dates.ts";
 import { prisma } from "../db/prisma.ts";
 import { toApiBooking } from "./mappers/booking.ts";
+import type { Role } from "../generated/prisma/enums.ts";
 
 const bookingWithCarInclude = {
   car: { select: { id: true, brand: true, model: true, imageUrl: true } },
 } as const;
+
+function ownershipFilter(user: { id: string; role: Role }) {
+  if (user.role === "ADMIN") {
+    return {};
+  } else {
+    return { userId: user.id };
+  }
+}
 
 const bookingSchema = z.object({
   carId: z.uuid(),
   startDate: z.iso.date(),
   endDate: z.iso.date(),
 });
+
+const bookingIdSchema = z.uuid();
 
 export async function createBooking(req: Request, res: Response) {
   const user = res.locals.user;
@@ -99,7 +110,7 @@ export async function getBookings(_req: Request, res: Response) {
     return;
   }
 
-  const where = user.role === "ADMIN" ? {} : { userId: user.id };
+  const where = ownershipFilter(user);
 
   const bookings = await prisma.booking.findMany({
     where: where,
@@ -107,4 +118,32 @@ export async function getBookings(_req: Request, res: Response) {
     orderBy: { createdAt: "desc" },
   });
   res.status(200).json(bookings.map((booking) => toApiBooking(booking)));
+}
+
+export async function getBookingById(req: Request, res: Response) {
+  const user = res.locals.user;
+
+  if (!user) {
+    res.status(401).json({ message: "Session required" });
+    return;
+  }
+
+  const idResult = bookingIdSchema.safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ message: "Invalid booking id" });
+    return;
+  }
+
+  const booking = await prisma.booking.findFirst({
+    where: { id: idResult.data, ...ownershipFilter(user) },
+    include: bookingWithCarInclude,
+  });
+  if (booking === null) {
+    res
+      .status(404)
+      .json({ message: `No booking found with id ${req.params.id}` });
+    return;
+  }
+
+  res.status(200).json(toApiBooking(booking));
 }
