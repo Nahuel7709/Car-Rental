@@ -35,8 +35,13 @@ enum Role {
   CUSTOMER
 }
 
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+}
+
 model Car {
-  id               String         @id @default(uuid(7)) @db.Uuid
+  id               String      @id @default(uuid(7)) @db.Uuid
   brand            String
   model            String
   year             Int
@@ -49,14 +54,33 @@ model Car {
   suitcaseCapacity Int
   gearbox          Gearbox
   ageRequired      Int
+  bookings         Booking[]
 }
 
 model User {
-  id               String @id @default(uuid(7)) @db.Uuid
-  name             String
-  email            String @unique
-  role             Role @default(CUSTOMER)
-  passwordHash     String
-  createdAt        DateTime   @default(now()) 
-  updatedAt        DateTime   @updatedAt
+  id           String    @id @default(uuid(7)) @db.Uuid
+  name         String
+  email        String    @unique
+  role         Role      @default(CUSTOMER)
+  passwordHash String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  bookings     Booking[]
+}
+
+model Booking {
+  id         String        @id @default(uuid(7)) @db.Uuid
+  user       User          @relation(fields: [userId], references: [id])
+  userId     String        @db.Uuid
+  car        Car           @relation(fields: [carId], references: [id])
+  carId      String        @db.Uuid
+  startDate  DateTime      @db.Date
+  endDate    DateTime      @db.Date
+  totalPrice Int
+  status     BookingStatus @default(CONFIRMED)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([carId])
 }
