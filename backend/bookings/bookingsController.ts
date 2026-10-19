@@ -10,6 +10,11 @@ const bookingSchema = z.object({
 });
 
 export async function createBooking(req: Request, res: Response) {
+  const user = res.locals.user;
+  if (!user) {
+    res.status(401).json({ message: "Session required" });
+    return;
+  }
   //body validations
   const result = bookingSchema.safeParse(req.body);
   if (!result.success) {
@@ -41,35 +46,41 @@ export async function createBooking(req: Request, res: Response) {
   //calculate the price
   const price = car?.pricePerDay * totalDays;
 
-  //first search if there is already a booking for these days with that car
-  const isBooked = await prisma.booking.findFirst({
-    where: {
-      carId: data.carId,
-      status: "CONFIRMED",
-      startDate: { lt: new Date(data.endDate) },
-      endDate: { gt: new Date(data.startDate) },
-    },
+  //transaction
+  const transactionResult = await prisma.$transaction(async (tx) => {
+    //block rows with sql
+    await tx.$queryRaw`SELECT id FROM "Car" WHERE id = ${data.carId}::uuid FOR UPDATE`;
+
+    //first search if there is already a booking for these days with that car
+    const isBooked = await tx.booking.findFirst({
+      where: {
+        carId: data.carId,
+        status: "CONFIRMED",
+        startDate: { lt: new Date(data.endDate) },
+        endDate: { gt: new Date(data.startDate) },
+      },
+    });
+
+    if (isBooked !== null) {
+      return { error: 409 as const };
+    }
+
+    const booking = await tx.booking.create({
+      data: {
+        userId: user.id,
+        carId: data.carId,
+        startDate: new Date(data.startDate),
+        endDate: new Date(data.endDate),
+        totalPrice: price,
+      },
+    });
+
+    return booking;
   });
 
-  if (isBooked !== null) {
-    res.status(409).json({ message: "The car is already booked" });
+  if ("error" in transactionResult) {
+    res.status(409).json({ message: "Car already booked" });
     return;
   }
-
-  if (!res.locals.user) {
-    res.status(401).json({ message: "Session required" });
-    return;
-  }
-
-  const booking = await prisma.booking.create({
-    data: {
-      userId: res.locals.user.id,
-      carId: data.carId,
-      startDate: new Date(data.startDate),
-      endDate: new Date(data.endDate),
-      totalPrice: price,
-    },
-  });
-
-  res.status(201).json(booking);
+  res.status(201).json(transactionResult);
 }
