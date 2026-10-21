@@ -14,6 +14,10 @@ export async function createBooking(
     body: JSON.stringify({ carId, startDate, endDate }),
   });
 
+  if (res.status === 409) {
+    throw new Error("This car is not available for those dates");
+  }
+
   if (!res.ok) {
     const data = await res.json();
     throw new Error(data.message);
