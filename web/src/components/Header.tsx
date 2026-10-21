@@ -60,6 +60,9 @@ export const Header = () => {
                 </span>
                 {user.name}
               </span>
+              <Link to="/bookings" className={buttonClass("ghost", "py-2")}>
+                My bookings
+              </Link>
               {user.role === "ADMIN" && (
                 <Link to="/admin" className={buttonClass("ghost", "py-2")}>
                   Add car

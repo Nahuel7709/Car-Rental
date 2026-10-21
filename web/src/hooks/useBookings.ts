@@ -21,9 +21,16 @@ export function useBookings() {
     }
   }, []);
 
+  // Replaces one booking in the list without reloading the whole page
+  const updateBooking = useCallback((updated: Booking) => {
+    setBookings((prev) =>
+      prev.map((booking) => (booking.id === updated.id ? updated : booking)),
+    );
+  }, []);
+
   useEffect(() => {
     getBookings();
   }, [getBookings]);
 
-  return { bookings, loading, error, getBookings };
+  return { bookings, loading, error, getBookings, updateBooking };
 }

@@ -6,6 +6,7 @@ import { Badge } from "../ui/Badge";
 import { CarNotFound } from "../components/CarNotFound";
 import { CarDetailsSkeleton } from "../components/CarDetailsSkeleton";
 import { BookingForm } from "../components/BookingForm";
+import { money } from "../utils/format";
 
 export const CarDetailsPage = () => {
   const { id } = useParams();
@@ -93,7 +94,24 @@ export const CarDetailsPage = () => {
           </dl>
         </div>
 
-        <BookingForm car={car} />
+        <aside className="lg:sticky lg:top-24 lg:self-start">
+          <div className="rounded-2xl border border-ink-200 bg-white p-6 shadow-sm">
+            <p>
+              <span className="text-3xl font-bold text-ink-900">
+                {money(car.pricePerDay)}
+              </span>
+              <span className="text-ink-500"> / day</span>
+            </p>
+
+            <p className="mt-1 text-sm text-ink-500">
+              Drivers aged {car.ageRequired} and over
+            </p>
+
+            <div className="my-5 h-px bg-ink-200" />
+
+            <BookingForm car={car} />
+          </div>
+        </aside>
       </div>
     </div>
   );
