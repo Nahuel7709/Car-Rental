@@ -2,9 +2,10 @@ import { Link, useParams } from "react-router";
 import { useCar } from "../hooks/useCar";
 import { ErrorMessage } from "../ui/ErrorMessage";
 import { Badge } from "../ui/Badge";
-import { buttonClass } from "../ui/buttonStyles";
+
 import { CarNotFound } from "../components/CarNotFound";
 import { CarDetailsSkeleton } from "../components/CarDetailsSkeleton";
+import { BookingForm } from "../components/BookingForm";
 import { money } from "../utils/format";
 
 export const CarDetailsPage = () => {
@@ -108,42 +109,7 @@ export const CarDetailsPage = () => {
 
             <div className="my-5 h-px bg-ink-200" />
 
-            <dl className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <dt className="text-ink-500">{money(car.pricePerDay)} x 3 days</dt>
-                <dd className="font-medium text-ink-900">
-                  {money(car.pricePerDay * 3)}
-                </dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-ink-500">Insurance</dt>
-                <dd className="font-medium text-ink-900">
-                  {money(Math.round(car.pricePerDay * 0.15))}
-                </dd>
-              </div>
-            </dl>
-
-            <div className="my-5 h-px bg-ink-200" />
-
-            <div className="flex justify-between text-base font-bold text-ink-900">
-              <span>Total</span>
-              <span>
-                {money(
-                  car.pricePerDay * 3 + Math.round(car.pricePerDay * 0.15),
-                )}
-              </span>
-            </div>
-
-            <button
-              type="button"
-              className={buttonClass("primary", "mt-6 w-full")}
-            >
-              Book this car
-            </button>
-
-            <p className="mt-3 text-center text-xs text-ink-500">
-              You won't be charged yet
-            </p>
+            <BookingForm car={car} />
           </div>
         </aside>
       </div>

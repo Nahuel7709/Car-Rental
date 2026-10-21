@@ -923,3 +923,39 @@ Because a cancelled booking does not use the car anymore. Bookings are never del
 
 ### Where AI helped
 I used Claude to explain the concepts (overlapping ranges, dates and time zones, ownership, race conditions and locks), to prepare the study PDF and the Before coding answers, and to guide and review each step. I wrote the model, the endpoints, the transaction and the mapper step by step. The bookings tests were written by Claude and I reviewed and ran them.
+
+## Part 2: Frontend
+
+### Steps
+1. Added the `Booking` interface (the same shape the API returns) and `api/bookings.ts` with `createBooking`, `fetchMyBookings` and `cancelBookingRequest`.
+2. Added `RequireAuth` to protect pages that need a session, without a role check.
+3. Replaced the static price mock-up on the car details page with a booking form: date selection, a live price preview and the request to the API.
+4. Added the "My bookings" page with a `useBookings` hook and a `BookingCard` component, and the cancel action.
+5. Added the "My bookings" link in the header and a `formatDate` helper.
+6. Styled everything like the rest of the app, with skeletons, a custom date range picker and confirmation dialogs.
+7. Added a seed for a regular user.
+
+### Decisions
+- **The price in the form is only a preview.** The front shows days × price per day so the user knows the total before confirming, but it never sends the price. The confirmation shows the `totalPrice` returned by the backend.
+- **Derived state:** days and total are calculated on every render from the two dates, not stored in their own `useState`, so they can never get out of sync.
+- **Friendly 409 message:** `createBooking` turns a `409` into "This car is not available for those dates", so the component does not need to know about status codes.
+- **Dates shown in UTC:** `formatDate` uses `timeZone: "UTC"`. The dates are stored as UTC midnight, and in Buenos Aires time they would show the day before.
+- **Custom date range picker:** two clicks (pick-up and return), the range follows the mouse while choosing the return, and past days and days beyond 30 are disabled. It works with `YYYY-MM-DD` strings and UTC dates, like the backend.
+- **Confirmation dialogs instead of `window.confirm`:** a reusable `ConfirmDialog` for booking and cancelling, closing with Escape or by clicking outside. Cancelling uses a red button.
+- **No full reload after cancelling:** the `PATCH` returns the updated booking, so `updateBooking` replaces only that item in the list instead of fetching everything again.
+- **Client rules are only for the user:** past dates, the 30-day limit and the cancel button visibility follow the backend rules, but the backend still validates everything.
+- **Shared user seed:** `seedUser(role, prefix)` is used by `seed:admin` and the new `seed:customer`, so a regular user for testing can be created from `CUSTOMER_*` variables.
+
+### Problems found
+- `cancelBookingRequest` first used `/bookings/:id/cancel` literally in the URL. `:id` is Express route syntax: `fetch` sends the text as it is.
+- `RequireAuth` was copied from `RequireAdmin` without renaming it, and `/bookings` ended up inside the admin route, so only admins could open it.
+- `isValidRange` did not check that both dates were chosen: an empty string is "smaller" than any date, so choosing only the return date showed "NaN days".
+- Several early returns had JSX without `return`, so the confirmation and the loading state were never shown.
+- The bookings hook never called its fetch function (missing `useEffect`), so the page stayed loading forever.
+- The empty list check used `=== null`, but the state starts as an empty array.
+- The cancel button called `() => onCancel` (returns the function) instead of `() => onCancel(booking.id)`.
+- Used `??` instead of `&&` to show the error alert, which shows it exactly when there is no error.
+- A `window.confirm` ended up in the component body instead of the handler, so it ran on every render.
+
+### Where AI helped
+I used Claude to explain each step and review my code. I wrote the API client, `RequireAuth`, the booking form logic, the bookings hook, the page and the card logic. Claude did the styling to match the rest of the app, the skeletons, the date range picker, the confirmation dialogs, the `updateBooking` change, the customer seed and the refactor of the admin seed, and I reviewed and tested them.

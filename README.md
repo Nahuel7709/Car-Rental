@@ -75,8 +75,9 @@ Clone the project. Both parts have to be running at the same time, so use two te
 ```bash
    npm run seed:cars
    npm run seed:admin
+   npm run seed:customer
 ```
-   `seed:cars` inserts the cars and `seed:admin` creates the admin user with the `ADMIN_*` credentials.
+   `seed:cars` inserts the cars, `seed:admin` creates the admin user with the `ADMIN_*` credentials, and `seed:customer` (optional) creates a regular user with the `CUSTOMER_*` credentials, useful to try bookings.
 6. Run the backend:
 ```bash
    npm run dev
@@ -102,6 +103,7 @@ npm run dev
 - `DATABASE_URL`: required. There is no default, the server does not start without it. It is the connection string of your PostgreSQL database, in the format `postgresql://USER:PASSWORD@HOST:PORT/DATABASE`.
 - `JWT_SECRET`: required. The server does not start without it. It is the secret used to sign the tokens, so use a long random string. You can generate one with: `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"`
 - `ADMIN_NAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`: only needed to run `npm run seed:admin`. The admin user is created with these credentials, and the seed fails if any of them is missing.
+- `CUSTOMER_NAME`, `CUSTOMER_EMAIL`, `CUSTOMER_PASSWORD`: optional, only needed to run `npm run seed:customer`. They create a regular user (CUSTOMER role) with the same rules as the admin seed.
 - `PORT`: optional, defaults to 3000. Hosting platforms usually set it themselves.
 - `CORS_ORIGIN`: optional, defaults to http://localhost:5173. It is the origin allowed to call the API and send cookies.
 - `NODE_ENV`: optional. When it is `production`, the cookie is only sent over HTTPS (secure). In local development leave it empty.
@@ -144,6 +146,7 @@ Every push and pull request runs the GitHub Actions workflow in `.github/workflo
 
 - Anyone can register from `/register`. New users always get the CUSTOMER role.
 - To log in as admin, use the `ADMIN_EMAIL` and `ADMIN_PASSWORD` you set before running `npm run seed:admin`. The admin sees an "Add car" link in the header that leads to `/admin`.
+- To try bookings without registering, run `npm run seed:customer` and log in with `CUSTOMER_EMAIL` and `CUSTOMER_PASSWORD`. Both seeds can be run again safely: if the user exists, only its password is updated.
 
 
 ## Bookings
