@@ -8,7 +8,8 @@ import { daysBetween, todayInBuenosAires } from "../utils/dates";
 import { formatDate, money, plural } from "../utils/format";
 import { Button } from "../ui/Button";
 import { FormAlert } from "../ui/FormAlert";
-import { FormField } from "../ui/FormField";
+import { ConfirmDialog } from "../ui/ConfirmDialog";
+import { DateRangePicker } from "./DateRangePicker";
 import { buttonClass } from "../ui/buttonStyles";
 
 const MAX_DAYS = 30;
@@ -26,12 +27,12 @@ export const BookingForm = ({ car }: CarProps) => {
   const [error, setError] = useState<null | string>(null);
   const [booking, setBooking] = useState<Booking | null>(null);
 
-  const handleStartDate = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setStartDate(e.target.value);
-  };
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const handleEndDate = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setEndDate(e.target.value);
+  const handleDatesChange = (start: string, end: string) => {
+    setStartDate(start);
+    setEndDate(end);
+    setError(null);
   };
 
   const handleBook = async () => {
@@ -48,6 +49,7 @@ export const BookingForm = ({ car }: CarProps) => {
       );
     } finally {
       setSubmitting(false);
+      setConfirmOpen(false);
     }
   };
 
@@ -145,24 +147,13 @@ export const BookingForm = ({ car }: CarProps) => {
 
   return (
     <div>
-      <div className="grid grid-cols-2 gap-3">
-        <FormField
-          id="booking-start"
-          label="Pick-up"
-          type="date"
-          value={startDate}
-          onChange={handleStartDate}
-          min={todayInBuenosAires()}
-        />
-        <FormField
-          id="booking-end"
-          label="Return"
-          type="date"
-          value={endDate}
-          onChange={handleEndDate}
-          min={startDate || todayInBuenosAires()}
-        />
-      </div>
+      <DateRangePicker
+        startDate={startDate}
+        endDate={endDate}
+        onChange={handleDatesChange}
+        minDate={todayInBuenosAires()}
+        maxDays={MAX_DAYS}
+      />
 
       <div className="my-5 h-px bg-ink-200" />
 
@@ -197,9 +188,9 @@ export const BookingForm = ({ car }: CarProps) => {
       <Button
         className="mt-6"
         disabled={!isValidRange || isTooLong || submitting}
-        onClick={handleBook}
+        onClick={() => setConfirmOpen(true)}
       >
-        {submitting ? "Booking..." : "Book this car"}
+        Book this car
       </Button>
 
       <p className="mt-3 text-center text-xs text-ink-500">
@@ -207,6 +198,48 @@ export const BookingForm = ({ car }: CarProps) => {
       </p>
 
       {error && <FormAlert message={error} />}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Confirm your booking"
+        confirmLabel="Confirm booking"
+        loading={submitting}
+        loadingLabel="Booking..."
+        onConfirm={handleBook}
+        onCancel={() => setConfirmOpen(false)}
+      >
+        <p className="text-sm text-ink-500">
+          {car.brand} {car.model}
+        </p>
+        <dl className="mt-4 space-y-2 text-sm">
+          <div className="flex justify-between">
+            <dt className="text-ink-500">Pick-up</dt>
+            <dd className="font-medium text-ink-900">
+              {isValidRange && formatDate(startDate)}
+            </dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="text-ink-500">Return</dt>
+            <dd className="font-medium text-ink-900">
+              {isValidRange && formatDate(endDate)}
+            </dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="text-ink-500">
+              {money(car.pricePerDay)} × {plural(days, "day", "days")}
+            </dt>
+            <dd className="font-medium text-ink-900">{money(total)}</dd>
+          </div>
+        </dl>
+        <div className="my-4 h-px bg-ink-200" />
+        <div className="flex justify-between text-base font-bold text-ink-900">
+          <span>Total</span>
+          <span>{money(total)}</span>
+        </div>
+        <p className="mt-3 text-xs text-ink-500">
+          The final price is confirmed by our system when you book.
+        </p>
+      </ConfirmDialog>
     </div>
   );
 };

@@ -7,19 +7,28 @@ import { useBookings } from "../hooks/useBookings";
 import { ErrorMessage } from "../ui/ErrorMessage";
 import { FormAlert } from "../ui/FormAlert";
 import { buttonClass } from "../ui/buttonStyles";
+import { ConfirmDialog } from "../ui/ConfirmDialog";
+import { Booking } from "../interfaces/Booking";
+import { formatDate, money } from "../utils/format";
 
 export const MyBookingsPage = () => {
   const { bookings, loading, error, getBookings, updateBooking } =
     useBookings();
   const [cancelError, setCancelError] = useState<null | string>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  // The booking shown in the confirmation dialog, or null when it is closed
+  const [bookingToCancel, setBookingToCancel] = useState<Booking | null>(null);
 
-  async function handleCancel(id: string) {
-    if (!window.confirm("Cancel this booking?")) return;
+  function askToCancel(id: string) {
     setCancelError(null);
-    setCancellingId(id);
+    setBookingToCancel(bookings.find((booking) => booking.id === id) ?? null);
+  }
+
+  async function handleCancel() {
+    if (bookingToCancel === null) return;
+    setCancellingId(bookingToCancel.id);
     try {
-      const cancelled = await cancelBookingRequest(id);
+      const cancelled = await cancelBookingRequest(bookingToCancel.id);
       updateBooking(cancelled);
     } catch (err) {
       setCancelError(
@@ -27,6 +36,7 @@ export const MyBookingsPage = () => {
       );
     } finally {
       setCancellingId(null);
+      setBookingToCancel(null);
     }
   }
 
@@ -94,11 +104,40 @@ export const MyBookingsPage = () => {
           <BookingCard
             key={booking.id}
             booking={booking}
-            onCancel={handleCancel}
+            onCancel={askToCancel}
             cancelling={cancellingId === booking.id}
           />
         ))}
       </div>
+
+      <ConfirmDialog
+        open={bookingToCancel !== null}
+        title="Cancel this booking?"
+        confirmLabel="Cancel booking"
+        cancelLabel="Keep booking"
+        confirmVariant="danger"
+        loading={cancellingId !== null}
+        loadingLabel="Cancelling..."
+        onConfirm={handleCancel}
+        onCancel={() => setBookingToCancel(null)}
+      >
+        {bookingToCancel && (
+          <>
+            <p className="text-sm text-ink-700">
+              Your booking of the{" "}
+              <span className="font-semibold text-ink-900">
+                {bookingToCancel.car.brand} {bookingToCancel.car.model}
+              </span>{" "}
+              from {formatDate(bookingToCancel.startDate)} to{" "}
+              {formatDate(bookingToCancel.endDate)} (
+              {money(bookingToCancel.totalPrice)}) will be cancelled.
+            </p>
+            <p className="mt-2 text-sm text-ink-500">
+              The dates will be free for other customers. This can't be undone.
+            </p>
+          </>
+        )}
+      </ConfirmDialog>
     </div>
   );
 };
