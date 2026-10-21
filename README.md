@@ -144,3 +144,62 @@ Every push and pull request runs the GitHub Actions workflow in `.github/workflo
 
 - Anyone can register from `/register`. New users always get the CUSTOMER role.
 - To log in as admin, use the `ADMIN_EMAIL` and `ADMIN_PASSWORD` you set before running `npm run seed:admin`. The admin sees an "Add car" link in the header that leads to `/admin`.
+
+
+## Bookings
+
+Logged-in users can book a car between two dates, see their bookings and cancel them. A car can never be booked twice for overlapping dates.
+
+### Endpoints
+
+All of them require a session.
+
+| Method | Endpoint | CUSTOMER | ADMIN |
+|---|---|---|---|
+| `POST` | `/bookings` | Creates a booking for themselves | Same |
+| `GET` | `/bookings` | Only their bookings | All bookings |
+| `GET` | `/bookings/:id` | Only their bookings (someone else's returns `404`) | Any booking |
+| `PATCH` | `/bookings/:id/cancel` | Only their bookings | Any booking |
+
+### Creating a booking
+
+```json
+POST /bookings
+{
+  "carId": "0199f2c4-...",
+  "startDate": "2026-11-10",
+  "endDate": "2026-11-15"
+}
+```
+
+The response:
+
+```json
+{
+  "id": "0199f2d1-...",
+  "status": "CONFIRMED",
+  "totalPrice": 25000,
+  "startDate": "2026-11-10",
+  "endDate": "2026-11-15",
+  "car": { "id": "0199f2c4-...", "brand": "Toyota", "model": "Corolla" }
+}
+```
+
+### Rules
+
+- Dates are sent and returned as `YYYY-MM-DD` strings, and stored as dates without time, so they never shift one day because of the time zone.
+- The end date is the return day and is not charged: a booking from the 10th to the 15th is 5 days. A booking can start on the day another one ends.
+- `startDate` can not be in the past (today, in Buenos Aires time, is allowed). A booking can last 30 days at most.
+- `totalPrice` is calculated by the backend (days × the car's price per day at that moment) and stored, so later price changes do not affect existing bookings. The user and the price are never taken from the request body.
+- Overlapping a `CONFIRMED` booking of the same car returns `409`. Cancelled bookings do not block dates.
+- Cancelling changes the status to `CANCELLED`. Bookings are never deleted. A booking that is already cancelled or already started can not be cancelled (`409`).
+- Bookings are created inside a transaction that locks the car row (`SELECT ... FOR UPDATE`), so two simultaneous requests for the same car and dates can not both succeed.
+
+### Status codes
+
+| Code | When |
+| ---  | ---  |
+| `400`| Invalid body or ID, end date not after start date, start date in the past, more than 30 days |
+| `401`| No session |
+| `404`| The car or the booking does not exist, or the booking belongs to another customer |
+| `409`| Overlapping dates, or cancelling a booking that is cancelled or already started |

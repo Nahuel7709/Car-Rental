@@ -5,8 +5,10 @@ import { prisma } from "../db/prisma.ts";
 
 const TEST_PASSWORD = "securepassword3324";
 
-export async function createTestUser(role: "ADMIN" | "CUSTOMER") {
-  const email = `${role.toLowerCase()}@mail.com`;
+export async function createTestUser(
+  role: "ADMIN" | "CUSTOMER",
+  email = `${role.toLowerCase()}@mail.com`,
+) {
   const passwordHash = await argon2.hash(TEST_PASSWORD);
 
   await prisma.user.create({

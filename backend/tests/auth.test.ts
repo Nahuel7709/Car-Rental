@@ -4,6 +4,8 @@ import { app } from "../app.ts";
 import { prisma } from "../db/prisma.ts";
 import { createTestUser, loginAs } from "./helpers.ts";
 
+await prisma.booking.deleteMany();
+
 beforeEach(async () => {
   await prisma.user.deleteMany();
 });

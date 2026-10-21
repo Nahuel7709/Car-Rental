@@ -9,6 +9,8 @@ import {
   validCarData,
 } from "./helpers.ts";
 
+await prisma.booking.deleteMany();
+
 beforeEach(async () => {
   await prisma.car.deleteMany();
   await prisma.user.deleteMany();

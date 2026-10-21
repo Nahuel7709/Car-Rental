@@ -848,3 +848,78 @@ With UUID v7 the ID starts with the creation timestamp, so ordering by `id` mean
 - A malformed UUID (one character short) returns `400`.
 
 The old `MAX_INT` test was removed, since that limit does not exist anymore.
+
+
+# Task 11: Car bookings
+
+## Before coding
+
+
+
+**2. Why does the booking store `totalPrice` if the car already has `pricePerDay`?**
+
+Because the car price can change after the booking is made. The booking has to keep the price that was agreed at that moment, like a receipt. If the price was calculated from the car every time, an old booking would change its price when the admin updates the car. `totalPrice` is a snapshot of the price when the booking was created.
+
+**3. Why is `startDate` stored as `@db.Date` and sent as a `YYYY-MM-DD` string, instead of a full date with time? What bug does it avoid?**
+
+A rental is booked by days, not by an exact moment. JavaScript has no "date only" type: `new Date("2026-10-20")` creates a moment, midnight of the 20th in UTC. In Buenos Aires (UTC-3) that moment is 21:00 of the 19th, so if it is shown in local time the user sees that they booked the 19th. The date moves one day without any error. Sending the dates as `YYYY-MM-DD` strings, storing them as `DATE` without time, and treating them as calendar days avoids that shift.
+
+**4. "Today" depends on the time zone. At 22:00 in Buenos Aires it is already the next day in UTC. Which "today" will you use to reject past dates, and why?**
+
+The business works in Argentina, so "today" is the current date in the `America/Argentina/Buenos_Aires` time zone, calculated on the server. If I used the UTC date, between 21:00 and midnight a customer could not book for that same day, because in UTC it would already be the next day and today would look like the past. It is calculated on the server and not taken from the client, because the client clock can be wrong or changed. I get it as a `YYYY-MM-DD` string so it can be compared directly with `startDate`.
+
+**5. Explain the race condition in `POST /bookings` and how the transaction with the lock prevents it.**
+
+Creating a booking has two steps: check if there is an overlapping confirmed booking, and if there is not, insert the new one. If two requests for the same car and dates arrive at the same time, both can run the check before either one inserts. Both see the car as free, and both insert, so the car ends up booked twice. This is a check-then-act race condition. With the transaction, the first request locks the car row with `SELECT ... FOR UPDATE` before checking. The second request has to wait until the first transaction ends. When it continues, the first booking already exists, its check finds the overlap and it returns `409`. The lock lasts only milliseconds, the length of the transaction, and it does not decide anything: it only puts the requests in order so they can not mix.
+
+**6. Why does `GET /bookings/:id` return `404` and not `403` for someone else's booking?**
+
+A `403` says "this booking exists, but it is not yours". With that, a user could find out which booking IDs exist. A `404` gives no information: for that user, a booking that belongs to someone else is the same as one that does not exist. The access check is done in the query itself, filtering by the user ID from the session.
+
+**7. Why does the overlap check only look at `CONFIRMED` bookings?**
+
+Because a cancelled booking does not use the car anymore. Bookings are never deleted, only their status changes to `CANCELLED`, so the history is kept. If the check included cancelled bookings, a cancellation would block those dates forever. Filtering by `CONFIRMED` makes a cancellation free the dates again.
+
+## Part 1: Backend
+
+### Steps
+1. Added the `Booking` model with relations to `User` and `Car`, a `BookingStatus` enum, date-only columns and indexes on `carId` and `userId`.
+2. Created `POST /bookings` with body validation (Zod) and the date rules.
+3. Added the car lookup, the price calculation, the overlap check and the creation of the booking.
+4. Moved the overlap check and the creation into a transaction that locks the car row.
+5. Added a mapper so responses have date-only strings and a car summary.
+6. Added `GET /bookings`, `GET /bookings/:id` and `PATCH /bookings/:id/cancel`, with a shared ownership filter.
+7. Added the tests and updated the cleanup of the other test files.
+
+### Decisions
+- **Half-open ranges:** the overlap condition is `existingStart < newEnd AND newStart < existingEnd`, with `<` and not `<=`, so a booking can start the day another one ends.
+- **"Today" in Buenos Aires:** the business works in Argentina, so past dates are checked against the current date in `America/Argentina/Buenos_Aires`, calculated on the server.
+- **Dates as `YYYY-MM-DD` strings:** they are compared directly as strings (the format keeps the order) and stored as `@db.Date`, to avoid the one-day shift of time zones.
+- **Price snapshot:** `totalPrice` is stored in the booking, so later changes to the car price do not change existing bookings.
+- **Cancel instead of delete:** bookings keep their history. The overlap check only looks at `CONFIRMED` bookings, so a cancellation frees the dates.
+- **No cascade delete:** the foreign keys use `ON DELETE RESTRICT`, so a car or a user with bookings can not be deleted.
+- **Indexes on `carId` and `userId`:** they are the columns used in the overlap check and in the user's list.
+- **Lock on the car row:** `SELECT ... FOR UPDATE` can only lock rows that exist. The new booking does not exist yet, and in the dangerous case there are no overlapping bookings to lock either. The car row always exists and is shared by both requests, so it works as the turnstile. It only blocks bookings of the same car.
+- **Errors returned from the transaction:** the transaction callback returns either the booking or `{ error: 409 }`, and the response is decided outside it.
+- **Ownership in the query:** `ownershipFilter(user)` returns `{}` for an admin and `{ userId }` for anyone else, and it is used in every query. Someone else's booking returns `404`, the same as one that does not exist, so it does not reveal which IDs exist.
+- **The user and the price never come from the body:** the user comes from the session, and Zod drops any key that is not in the schema.
+- **`PATCH` for cancelling:** `GET` must not change data.
+- **Mapper:** `toApiBooking` decides exactly what leaves the API: no `userId`, no timestamps, dates as strings and a car summary.
+
+### Problems found
+- Ran `npx prisma` from the repo root, and npx offered to download Prisma 8 because it did not find the local one. Ran it from `backend/`.
+- In the schema, `userId` had `@unique` (that would allow one booking per user) and no `@db.Uuid` (different type from `User.id`).
+- `daysBetween` subtracted in the wrong order and returned negative days, so the 30-day rule never triggered.
+- The "past date" check was inverted: it rejected future dates and accepted past ones.
+- The overlap query first checked "inside" instead of "overlaps", and then had the values crossed. Checked it with real values (a booking from the 10th to the 15th against one from the 8th to the 12th) until it found the overlap.
+- Several error responses had no `return`, so the code kept going and tried to respond twice.
+- TypeScript did not keep the `res.locals.user` check inside the transaction callback. Saved the user in a `const` before checking it.
+- The cancel endpoint was first a `GET` and the `update` had no `where` and `data`.
+- After adding bookings, the other test files could not delete cars and users because of the foreign keys. Every `beforeEach` now deletes bookings first.
+- `createTestUser` always used the same email, so it could not create two customers. Added an optional email parameter.
+
+### Tests
+37 tests passing (15 new). The bookings tests cover the price, the session, ignored body fields, the date rules, `404` for a missing car, overlaps (`409`), a booking that starts the day another one ends, cancellations freeing the dates, ownership in the list, the detail and the cancel, cancelling twice or a started booking, and two simultaneous requests (one `201`, one `409`, one booking in the database).
+
+### Where AI helped
+I used Claude to explain the concepts (overlapping ranges, dates and time zones, ownership, race conditions and locks), to prepare the study PDF and the Before coding answers, and to guide and review each step. I wrote the model, the endpoints, the transaction and the mapper step by step. The bookings tests were written by Claude and I reviewed and ran them.
