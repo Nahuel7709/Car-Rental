@@ -28,6 +28,10 @@ app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
   next(err);
 });
 
+app.get("/health", (_req: Request, res: Response) => {
+  res.status(200).json({ status: "ok" });
+});
+
 app.use(cookieParser());
 
 app.use("/cars", carsRouter);
