@@ -959,3 +959,67 @@ I used Claude to explain the concepts (overlapping ranges, dates and time zones,
 
 ### Where AI helped
 I used Claude to explain each step and review my code. I wrote the API client, `RequireAuth`, the booking form logic, the bookings hook, the page and the card logic. Claude did the styling to match the rest of the app, the skeletons, the date range picker, the confirmation dialogs, the `updateBooking` change, the customer seed and the refactor of the admin seed, and I reviewed and tested them.
+
+
+# Task 12: Docker and deploy
+
+## Before coding
+
+**1. Why does the Dockerfile copy `package.json` and `package-lock.json` before the rest of the code?**
+
+Because of the layer cache. Each instruction creates a layer, and when the image is built again Docker reuses every layer until the first one that changed. If only the dependency files are copied first and then `npm ci` runs, that layer is reused while the dependencies do not change. The code changes much more often than the dependencies, so most builds skip the install and take seconds instead of minutes. If all the code was copied first, any change in any file would reinstall all the dependencies.
+
+**2. Inside Compose, why does the API use `db:5432` in `DATABASE_URL` and not `localhost:5434`?**
+
+Inside a container, `localhost` is the container itself. Postgres runs in another container, so `localhost` would point to a place where there is no database. Compose puts both services in the same network, where each container can be reached by its service name, so the API uses `db`. The port is 5432 because that is where Postgres listens inside its container. Port 5434 is only the mapping from my computer to that container, and other containers do not use it.
+
+**3. Why do the migrations run when the container starts and not when the image is built?**
+
+The build does not have access to the database: it can run on another machine, and it should not depend on any environment. The same image is used locally and in production, and each environment has its own database that needs its own migrations. Running `prisma migrate deploy` on start applies the pending migrations to the database of the environment where the container is running, right before the server starts, so the code never runs against an outdated schema.
+
+**4. Why is the database on Neon and not in a container on Render?**
+
+Neon is a managed database: the provider takes care of backups, availability and updates. If I ran Postgres in my own container, all of that would be my responsibility, and a container is disposable, so losing it without a proper persistent volume and backups would mean losing the data. For production data it is safer to let a specialized provider run it.
+
+**5. Explain the cookie problem with the front and back on different domains, and how the Vercel rewrite solves it.**
+
+With the front on `vercel.app` and the back on `onrender.com`, they are different sites. The session cookie set by the back becomes a third-party cookie for the browser, and browsers block them more and more (Safari blocks them by default). The login returns 200, but the cookie is not stored, so the next request has no session and `/auth/me` returns 401. With a rewrite on Vercel, the front calls `/api/...` on its own domain and Vercel forwards the request to the back. For the browser everything comes from the same site, so the cookie is a first-party cookie and `sameSite: "lax"` works.
+
+**6. Why must the production `JWT_SECRET` be different from the one used in development?**
+
+The secret signs the session tokens. The development secret is stored in local `.env` files, it may be shared or weak, and it is less protected. If production used the same one, anyone who knows it could sign a valid token for any user, including an admin. Each environment needs its own secret, and the production one must be long, random and only stored in the hosting panel.
+
+
+## Part 1: Docker
+
+### Steps
+1. Added a `GET /health` endpoint, without authentication, and a test for it.
+2. Wrote `backend/Dockerfile` and `backend/.dockerignore`.
+3. Built the image and checked the layer cache: a second build reused every layer.
+4. Wrote `docker-compose.yml` with a `db` service (Postgres 17, volume and healthcheck) and an `api` service built from the Dockerfile.
+5. Ran the seeds inside the container with `docker compose exec`, and made the cars seed idempotent.
+6. Tested the full flow with the API in Docker and the frontend with Vite.
+
+### Decisions
+- **`node:24-alpine` as base image:** the same Node version as CI and local, on a small Linux image.
+- **Dependency files copied before the code:** the `npm ci` layer is reused when only the code changes, so rebuilds take seconds.
+- **Prisma client generated and TypeScript compiled inside the image:** `generated/` and `dist/` are in `.dockerignore`, so the image builds them for Linux.
+- **Migrations on start, not on build:** the container runs `npx prisma migrate deploy && node dist/index.js` through `sh -c`, because `&&` is a shell feature. The server only starts if the migrations succeed, and each environment migrates its own database.
+- **No secrets in the image:** `.env*` is in `.dockerignore`. Compose passes the variables when the container starts. The values in `docker-compose.yml` are only for local use, and the `JWT_SECRET` says so.
+- **`db:5432` instead of `localhost`:** inside a container, `localhost` is the container itself. Compose puts both services in the same network, where they find each other by service name.
+- **Healthcheck with a short interval and `depends_on: service_healthy`:** the API waits until Postgres accepts connections, without waiting the default 30 seconds.
+- **Named volume for the database:** the data survives `docker compose down`. `down -v` is the explicit way to reset.
+- **Idempotent cars seed:** it skips if there are cars already instead of emptying the table. A seed that deletes data first could wipe real bookings if it is run again in production.
+
+### Problems found
+- `docker build` failed with "no such file or directory" because it ran from the repo root. The `.` is the build context, and the Dockerfile is in `backend/`.
+- `COPY package* .json` had an extra space, so Docker read two paths instead of one.
+- The first `CMD` ran `node index.js`, which does not exist: the compiled code is in `dist/`, and the migrations were missing.
+- `ports: -5435:5432` was written in the same line, which is not a YAML list.
+- The admin email had an underscore in the domain, which would fail the seed validation.
+- Without `interval`, the healthcheck runs every 30 seconds, so the API could wait much longer than needed.
+- `pg_isready` without `-U` connects as `root`, and Postgres logged `role "root" does not exist` every few seconds. Fixed with `-U postgres`.
+- The cars seed used `TRUNCATE "Car"`, which Postgres rejects now that `Booking` has a foreign key to `Car`. Replaced it with a check that skips the seed when there are cars, and fixed the condition (it first used `!== 1`, which skipped an empty database).
+
+### Where AI helped
+I used Claude to explain Linux basics, Docker and Compose, to prepare the study PDFs and the Before coding answers, and to review each step. I wrote the Dockerfile, the `.dockerignore`, the Compose file and the seed changes, and debugged the build and the logs with its help.

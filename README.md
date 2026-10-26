@@ -13,9 +13,11 @@
 
 A full-stack car rental app built with TypeScript: a React frontend and an Express REST API backed by PostgreSQL and Prisma.
 
-Users can browse the car catalogue, see the details of each car, register, log in and log out. Authentication uses a JWT stored in an httpOnly cookie, passwords are hashed with argon2, and every request body is validated with Zod. There are two roles: CUSTOMER (the default) and ADMIN, which is the only one allowed to add new cars. Roles are enforced on the backend, and the role sent by the client is always ignored.
+Users can browse the car catalogue, see the details of each car, register, log in, and book a car between two dates. They can see their bookings and cancel them. Authentication uses a JWT stored in an httpOnly cookie, passwords are hashed with argon2, and every request body is validated with Zod. There are two roles: CUSTOMER (the default) and ADMIN, which can add new cars and see every booking. Roles and ownership are enforced on the backend: the role, the user and the price are never taken from the client.
 
-All records use UUID v7 as their ID. The backend has integration tests with Vitest and Supertest that run against a separate PostgreSQL database, and a GitHub Actions pipeline runs the typecheck and the tests on every push and pull request.
+A car can never be booked twice for overlapping dates, not even when two requests arrive at the same time: bookings are created inside a transaction that locks the car row.
+
+All records use UUID v7 as their ID. The backend has integration tests with Vitest and Supertest that run against a separate PostgreSQL database, a GitHub Actions pipeline runs the typecheck and the tests on every push and pull request, and the backend and its database can run with Docker Compose.
 
 ## Tech stack
 
@@ -37,20 +39,53 @@ All records use UUID v7 as their ID. The backend has integration tests with Vite
 
 **Testing and tooling**
 - Vitest and Supertest (integration tests)
-- Docker (local databases)
+- Docker and Docker Compose
 - GitHub Actions (CI)
 
 ## Requirements
 
-- Node.js 20.19 or higher (CI uses Node 24)
+- Node.js 20.19 or higher (CI and the Docker image use Node 24)
 - npm
-- Docker Desktop, for the local databases
+- Docker Desktop
 
 ## How to start the project
 
-Clone the project. Both parts have to be running at the same time, so use two terminals.
+There are two ways to run the backend: with Docker Compose (the quickest) or directly with Node. The frontend always runs with Vite.
 
-### Backend (runs on http://localhost:3000)
+## Run with Docker
+
+The backend and its database run with Docker Compose, without installing Postgres or setting up a `.env` for the backend.
+
+1. From the repo root, build and start the database and the API:
+```bash
+   docker compose up --build
+```
+   The API waits until Postgres is ready, applies the migrations and starts on http://localhost:3000.
+2. In another terminal, load the initial data (only needed the first time):
+```bash
+   docker compose exec api npm run seed:cars
+   docker compose exec api npm run seed:admin
+   docker compose exec api npm run seed:customer
+```
+   The seeds can be run again safely: the cars seed skips if there are cars already, and the user seeds only update the password.
+3. Start the frontend (see Frontend below). It talks to the API on http://localhost:3000.
+
+The local credentials (admin and customer) are defined in `docker-compose.yml`. They are only for local use.
+
+Useful commands:
+
+| Command | What it does |
+|---|---|
+| `docker compose up -d` | Starts everything in the background |
+| `docker compose logs -f api` | Shows the API logs live |
+| `docker compose down` | Stops and removes the containers. The data is kept in the `db-data` volume |
+| `docker compose down -v` | Also removes the volume: the database starts empty next time |
+
+The database is also exposed on port `5435`, so it can be opened with Prisma Studio or any Postgres client.
+
+## Run the backend with Node
+
+Runs on http://localhost:3000. Stop the Docker API first if it is running, because both use port 3000.
 
 1. Start the dev database. The first time, create the container:
 ```bash
@@ -83,7 +118,11 @@ Clone the project. Both parts have to be running at the same time, so use two te
    npm run dev
 ```
 
-### Frontend (runs on http://localhost:5173)
+To reset the dev database, run `npx prisma migrate reset` and the seeds again.
+
+## Frontend
+
+Runs on http://localhost:5173.
 
 ```bash
 cd web
@@ -112,7 +151,7 @@ npm run dev
 
 - `VITE_API_URL`: the URL of the backend, http://localhost:3000 in local development.
 
-The `.env` files are not committed, that is why there are `.env.example` files.
+The `.env` files are not committed, that is why there are `.env.example` files. With Docker Compose, the backend variables are set in `docker-compose.yml` instead.
 
 ## Running the tests
 
@@ -127,7 +166,7 @@ Tests run against a separate PostgreSQL database in Docker, never against the de
    docker start car-rental-test-db
 ```
 2. Create `backend/.env.test` from `backend/.env.test.example` and fill in `DATABASE_URL` and `JWT_SECRET`.
-3. Apply the migrations to the test database:
+3. From `backend/`, apply the migrations to the test database:
 ```bash
    npx dotenv -e .env.test -- npx prisma migrate deploy
 ```
@@ -148,6 +187,22 @@ Every push and pull request runs the GitHub Actions workflow in `.github/workflo
 - To log in as admin, use the `ADMIN_EMAIL` and `ADMIN_PASSWORD` you set before running `npm run seed:admin`. The admin sees an "Add car" link in the header that leads to `/admin`.
 - To try bookings without registering, run `npm run seed:customer` and log in with `CUSTOMER_EMAIL` and `CUSTOMER_PASSWORD`. Both seeds can be run again safely: if the user exists, only its password is updated.
 
+## API overview
+
+| Method | Endpoint | Access |
+|---|---|---|
+| `GET` | `/health` | Public. Returns `{ "status": "ok" }` |
+| `POST` | `/auth/register` | Public |
+| `POST` | `/auth/login` | Public |
+| `POST` | `/auth/logout` | Public |
+| `GET` | `/auth/me` | Session |
+| `GET` | `/cars` | Public |
+| `GET` | `/cars/:id` | Public |
+| `POST` | `/cars` | ADMIN |
+| `POST` | `/bookings` | Session |
+| `GET` | `/bookings` | Session |
+| `GET` | `/bookings/:id` | Session |
+| `PATCH` | `/bookings/:id/cancel` | Session |
 
 ## Bookings
 
@@ -201,8 +256,8 @@ The response:
 ### Status codes
 
 | Code | When |
-| ---  | ---  |
-| `400`| Invalid body or ID, end date not after start date, start date in the past, more than 30 days |
-| `401`| No session |
-| `404`| The car or the booking does not exist, or the booking belongs to another customer |
-| `409`| Overlapping dates, or cancelling a booking that is cancelled or already started |
+|---|---|
+| `400` | Invalid body or ID, end date not after start date, start date in the past, more than 30 days |
+| `401` | No session |
+| `404` | The car or the booking does not exist, or the booking belongs to another customer |
+| `409` | Overlapping dates, or cancelling a booking that is cancelled or already started |

@@ -1,0 +1,34 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: car_rental
+    ports:
+      - "5435:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/car_rental
+      JWT_SECRET: local-docker-secret-not-for-production
+      CORS_ORIGIN: http://localhost:5173
+      ADMIN_NAME: localadmin123
+      ADMIN_EMAIL: admin_car@localcar-rental.com
+      ADMIN_PASSWORD: adminlocal20977
+      CUSTOMER_NAME: localcustomer123
+      CUSTOMER_EMAIL: localcustomercar@hotmail.com
+      CUSTOMER_PASSWORD: "localcustomerCar12377"
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+volumes:
+  db-data:
