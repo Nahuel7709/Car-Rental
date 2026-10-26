@@ -181,6 +181,25 @@ The setup file loads `.env.test` and stops the run if `DATABASE_URL` does not po
 
 Every push and pull request runs the GitHub Actions workflow in `.github/workflows/ci.yml`. It installs the backend with `npm ci`, starts PostgreSQL 17 as a service container, generates the Prisma client, runs the typecheck, applies the migrations and runs the tests. The `main` branch is protected: changes go through a pull request, and the CI check has to pass before merging.
 
+
+## Deployment
+
+```
+Browser ──> Vercel (React build + /api proxy) ──> Render (Express API in Docker) ──> Neon (PostgreSQL 17)
+```
+
+- **Frontend on Vercel:** builds `web/` with `npm run build` and serves the static files. Every push to `main` deploys again.
+- **Backend on Render:** builds the image from `backend/Dockerfile`. When the container starts, it applies the pending migrations and then starts the server. Every push to `main` that changes `backend/` deploys again, and Render checks `/health` to know the service is up.
+- **Database on Neon:** managed PostgreSQL 17, in the same region as the backend (US East, Ohio). The connection uses SSL (`sslmode=require`).
+
+**The `/api` proxy.** The frontend never calls Render directly. `web/vercel.json` has a rewrite that forwards every request to `/api/*` to the Render URL, so for the browser the frontend and the API are the same site. That way the session cookie is first-party and `sameSite: "lax"` works, instead of being a third-party cookie that browsers block. A second rewrite sends any other route to `index.html`, so reloading a page like `/bookings` works and React Router handles it.
+
+**Environment variables in production:**
+- Render: `DATABASE_URL` (Neon), `JWT_SECRET` (different from the local one), `NODE_ENV=production` and `CORS_ORIGIN` (the Vercel URL).
+- Vercel: `VITE_API_URL=/api`. Vite writes this value into the JavaScript during the build, so changing it requires a new deploy.
+
+**Seeds.** The production database was seeded once from a local terminal, pointing `DATABASE_URL` to Neon.
+
 ## Users and roles
 
 - Anyone can register from `/register`. New users always get the CUSTOMER role.
@@ -261,3 +280,12 @@ The response:
 | `401` | No session |
 | `404` | The car or the booking does not exist, or the booking belongs to another customer |
 | `409` | Overlapping dates, or cancelling a booking that is cancelled or already started |
+
+
+**Live demo:** https://car-rental-xi-teal-49.vercel.app
+
+Demo account (CUSTOMER role), to try bookings without registering:
+- Email: `demo@car-rental.com`
+- Password: `customerCar12343`
+
+> The backend runs on a free instance that sleeps after inactivity, so the first request can take up to a minute. After that it responds normally.

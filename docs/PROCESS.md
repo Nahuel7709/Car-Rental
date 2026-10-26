@@ -1023,3 +1023,34 @@ The secret signs the session tokens. The development secret is stored in local `
 
 ### Where AI helped
 I used Claude to explain Linux basics, Docker and Compose, to prepare the study PDFs and the Before coding answers, and to review each step. I wrote the Dockerfile, the `.dockerignore`, the Compose file and the seed changes, and debugged the build and the logs with its help.
+
+
+## Part 2: Deploy
+
+### Steps
+1. Created the database on Neon (Postgres 17, US East Ohio) and copied the direct connection string.
+2. Created a web service on Render from `backend/Dockerfile`, with the production environment variables and `/health` as the health check. The first deploy applied all the migrations.
+3. Checked `/health` and `/cars` on the Render URL, and seeded the production database from a local terminal pointing to Neon.
+4. Added `web/vercel.json` with the `/api` proxy and the SPA fallback.
+5. Created the Vercel project with `web` as root directory and `VITE_API_URL=/api`.
+6. Updated `CORS_ORIGIN` on Render with the Vercel URL.
+7. Tested the full flow in production: login and reload, booking, My bookings with reload, cancel, and the admin page.
+
+### Decisions
+- **Vercel, Render and Neon:** each one hosts what it is good at (static frontend, Docker container, managed Postgres), and all of them have a free tier and deploy from GitHub.
+- **Same region for the API and the database (Ohio):** every query travels between Render and Neon, so keeping them close keeps the queries fast.
+- **Postgres 17 on Neon instead of the default 18:** the same version as Docker and CI, so what passes the tests is what runs in production.
+- **Direct connection instead of the pooled one:** `prisma migrate deploy` does not work well through the pooler, and the app is small enough for a direct connection.
+- **A new `JWT_SECRET` for production:** never the same as the local one.
+- **Migrations on container start:** Render's pre-deploy command is only for paid plans, and the Dockerfile `CMD` already runs `migrate deploy` before starting the server.
+- **Seeds run once from my machine:** with the variables set only in that terminal, which I closed afterwards so nothing else runs against production by mistake. The admin has a strong password, and the demo user is public on purpose so anyone can try the app.
+- **`/api` proxy on Vercel instead of calling Render directly:** the session cookie stays first-party and `sameSite: "lax"` keeps working. Calling `onrender.com` from `vercel.app` would make it a third-party cookie, which browsers block.
+- **SPA fallback after the proxy rule:** rewrites are checked in order, and `/(.*)` matches everything, so it has to go last. Real files like the JS bundle are served before the rewrites are checked.
+- **GitHub access only to this repository:** Render and Vercel get write permissions, so they only have access to the repo they deploy.
+
+### Problems found
+- Neon offered Postgres 18 by default. Changed it to 17 before creating the project.
+- I ran the PowerShell syntax (`$env:NAME="value"`) in Git Bash, which returned "command not found". In bash it is `export NAME="value"`.
+
+### Where AI helped
+I used Claude to explain how the deploy works (the platforms, SSL, the reverse proxy, build-time vs runtime variables) and to guide me through the configuration of each platform, reviewing each screen before saving. I created the accounts, configured the services, wrote `vercel.json`, ran the seeds and tested the flows in production.
