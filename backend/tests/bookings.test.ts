@@ -305,3 +305,100 @@ describe("PATCH /bookings/:id/cancel", () => {
     expect(res.status).toBe(409);
   });
 });
+
+describe("Active bookings limit", () => {
+  // Four date ranges that do not overlap each other
+  const ranges = [
+    [1, 2],
+    [3, 4],
+    [5, 6],
+    [7, 8],
+  ].map(([start, end]) => ({
+    startDate: daysFromToday(start),
+    endDate: daysFromToday(end),
+  }));
+
+  it("returns 409 when a customer already has 3 active bookings", async () => {
+    const car = await createTestCar();
+    const customer = await loggedInCustomer();
+
+    for (const range of ranges.slice(0, 3)) {
+      const res = await customer.post("/bookings").send({ carId: car.id, ...range });
+      expect(res.status).toBe(201);
+    }
+
+    const res = await customer.post("/bookings").send({ carId: car.id, ...ranges[3] });
+
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({
+      message: "You can have at most 3 active bookings",
+    });
+  });
+
+  it("does not count cancelled bookings", async () => {
+    const car = await createTestCar();
+    const customer = await loggedInCustomer();
+    const created = [];
+
+    for (const range of ranges.slice(0, 3)) {
+      const res = await customer.post("/bookings").send({ carId: car.id, ...range });
+      created.push(res.body.id);
+    }
+    await customer.patch(`/bookings/${created[0]}/cancel`);
+
+    const res = await customer.post("/bookings").send({ carId: car.id, ...ranges[3] });
+
+    expect(res.status).toBe(201);
+  });
+
+  it("does not count bookings that already ended", async () => {
+    const car = await createTestCar();
+    const customer = await loggedInCustomer();
+    const userId = await userIdByEmail("customer@mail.com");
+
+    for (let i = 0; i < 3; i++) {
+      await prisma.booking.create({
+        data: {
+          userId,
+          carId: car.id,
+          startDate: new Date(daysFromToday(-20 + i * 5)),
+          endDate: new Date(daysFromToday(-18 + i * 5)),
+          totalPrice: 1000,
+        },
+      });
+    }
+
+    const res = await customer.post("/bookings").send({ carId: car.id, ...ranges[0] });
+
+    expect(res.status).toBe(201);
+  });
+
+  it("does not limit the admin", async () => {
+    const car = await createTestCar();
+    const admin = await loginAs(await createTestUser("ADMIN"));
+
+    for (const range of ranges) {
+      const res = await admin.post("/bookings").send({ carId: car.id, ...range });
+      expect(res.status).toBe(201);
+    }
+  });
+
+  it("lets only one of two simultaneous requests go over the limit", async () => {
+    const carA = await createTestCar();
+    const carB = await createTestCar();
+    const customer = await loggedInCustomer();
+
+    await customer.post("/bookings").send({ carId: carA.id, ...ranges[0] });
+    await customer.post("/bookings").send({ carId: carA.id, ...ranges[1] });
+
+    // Different cars, so the car lock does not help: only the user lock does
+    const responses = await Promise.all([
+      customer.post("/bookings").send({ carId: carA.id, ...ranges[2] }),
+      customer.post("/bookings").send({ carId: carB.id, ...ranges[2] }),
+    ]);
+
+    const statuses = responses.map((res) => res.status).sort();
+    expect(statuses).toEqual([201, 409]);
+    expect(await prisma.booking.count()).toBe(3);
+  });
+});
