@@ -6,14 +6,28 @@ import { carsRouter } from "./cars/carsRouter.ts";
 import { authRouter } from "./auth/authRouter.ts";
 import cookieParser from "cookie-parser";
 import { bookingRouter } from "./bookings/bookingsRouter.ts";
+import helmet from "helmet";
+import { globalLimiter } from "./middlewares/rateLimiters.ts";
 
 export const app = express();
 
+const proxy = process.env.TRUST_PROXY;
+
+if (proxy) {
+  const nProxy = Number(proxy);
+  if (nProxy < 0 || !Number.isInteger(nProxy)) {
+    throw new Error("TRUST_PROXY must be a non-negative integer");
+  }
+  app.set("trust proxy", nProxy);
+}
+
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:5173";
+
+app.use(helmet());
 
 app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
 
-app.use(express.json());
+app.use(express.json({ limit: "10kb" }));
 
 app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
   if (
@@ -25,12 +39,27 @@ app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
     res.status(400).json({ message: "Invalid JSON" });
     return;
   }
+  if (
+    typeof err === "object" &&
+    err !== null &&
+    "type" in err &&
+    "status" in err &&
+    err.status === 413 &&
+    err.type === "entity.too.large"
+  ) {
+    res.status(413).json({ message: "Request body too large" });
+    return;
+  }
   next(err);
 });
 
 app.get("/health", (_req: Request, res: Response) => {
   res.status(200).json({ status: "ok" });
 });
+
+
+// After /health on purpose: Render calls it constantly to check the service.
+app.use(globalLimiter);
 
 app.use(cookieParser());
 

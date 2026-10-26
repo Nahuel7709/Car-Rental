@@ -13,7 +13,7 @@
 
 A full-stack car rental app built with TypeScript: a React frontend and an Express REST API backed by PostgreSQL and Prisma.
 
-Users can browse the car catalogue, see the details of each car, register, log in, and book a car between two dates. They can see their bookings and cancel them. Authentication uses a JWT stored in an httpOnly cookie, passwords are hashed with argon2, and every request body is validated with Zod. There are two roles: CUSTOMER (the default) and ADMIN, which can add new cars and see every booking. Roles and ownership are enforced on the backend: the role, the user and the price are never taken from the client.
+Users can browse the car catalogue, see the details of each car, register, log in, and book a car between two dates. They can see their bookings and cancel them. Authentication uses a JWT stored in an httpOnly cookie, passwords are hashed with argon2, and every request body is validated with Zod. There are two roles: CUSTOMER (the default) and ADMIN, which can add new cars and see every booking. Roles and ownership are enforced on the backend: the role, the user and the price are never taken from the client. A customer can have at most 3 active bookings.
 
 A car can never be booked twice for overlapping dates, not even when two requests arrive at the same time: bookings are created inside a transaction that locks the car row.
 
@@ -181,6 +181,56 @@ The setup file loads `.env.test` and stops the run if `DATABASE_URL` does not po
 
 Every push and pull request runs the GitHub Actions workflow in `.github/workflows/ci.yml`. It installs the backend with `npm ci`, starts PostgreSQL 17 as a service container, generates the Prisma client, runs the typecheck, applies the migrations and runs the tests. The `main` branch is protected: changes go through a pull request, and the CI check has to pass before merging.
 
+The API has basic protections for a public app: rate limiting per route, security headers, a request size limit, and a business limit on active bookings.
+
+
+## Deployment
+
+```
+Browser ──> Vercel (React build + /api proxy) ──> Render (Express API in Docker) ──> Neon (PostgreSQL 17)
+```
+
+- **Frontend on Vercel:** builds `web/` with `npm run build` and serves the static files. Every push to `main` deploys again.
+- **Backend on Render:** builds the image from `backend/Dockerfile`. When the container starts, it applies the pending migrations and then starts the server. Every push to `main` that changes `backend/` deploys again, and Render checks `/health` to know the service is up.
+- **Database on Neon:** managed PostgreSQL 17, in the same region as the backend (US East, Ohio). The connection uses SSL (`sslmode=require`).
+
+**The `/api` proxy.** The frontend never calls Render directly. `web/vercel.json` has a rewrite that forwards every request to `/api/*` to the Render URL, so for the browser the frontend and the API are the same site. That way the session cookie is first-party and `sameSite: "lax"` works, instead of being a third-party cookie that browsers block. A second rewrite sends any other route to `index.html`, so reloading a page like `/bookings` works and React Router handles it.
+
+**Environment variables in production:**
+- Render: `DATABASE_URL` (Neon), `JWT_SECRET` (different from the local one), `NODE_ENV=production` and `CORS_ORIGIN` (the Vercel URL). - `TRUST_PROXY`: optional. The number of proxies in front of the API, used to get the real client IP for rate limiting. Leave it empty locally. In production it is `4` (see Security). The server does not start if it is not a non-negative integer.
+- Vercel: `VITE_API_URL=/api`. Vite writes this value into the JavaScript during the build, so changing it requires a new deploy.
+
+**Seeds.** The production database was seeded once from a local terminal, pointing `DATABASE_URL` to Neon.
+
+## Security
+
+### Rate limiting
+
+Implemented with `express-rate-limit`. Over the limit, the API returns `429` with a JSON message and the standard `RateLimit` and `Retry-After` headers.
+
+| Route | Key | Limit |
+|---|---|---|
+| `POST /auth/login` | IP | 10 failed attempts per 15 minutes (successful logins do not count) |
+| `POST /auth/register` | IP | 5 per hour |
+| `POST /bookings` | User | 20 attempts per 15 minutes |
+| Rest of the API | IP | 300 per 15 minutes (`/health` is excluded, Render calls it constantly) |
+
+Routes that require a session are limited per user, not per IP: many mobile carriers share one public IP among thousands of customers (CGNAT), so limiting them per IP would block innocent users.
+
+The counters are kept in memory. That works with a single instance, but they are lost when the container restarts, and several instances would count separately. A shared store like Redis is the next step.
+
+### Client IP behind proxies
+
+In production, a request goes through Vercel, Cloudflare, Render's load balancer and a local proxy before reaching Express. The real client IP arrives in `X-Forwarded-For`, and `TRUST_PROXY` tells Express how many proxies to skip. The value (`4`) was measured in production with a temporary endpoint, not guessed.
+
+**Known limitation:** the measurement also showed that a client can spoof `X-Forwarded-For`, both through the Vercel proxy and by calling the Render URL directly. So the IP-based limits stop regular users and simple bots, but not an attacker who knows this. The real fixes are rate limiting at the edge (a WAF) and making Render only accept traffic from Vercel, which the free plans do not fully support. A per-account login limit was considered and discarded, because it lets anyone lock a user out of their account on purpose.
+
+### Other protections
+
+- **Request size:** JSON bodies are limited to 10 KB. A bigger body returns `413`.
+- **Security headers:** `helmet` on the API. The frontend headers (`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`) are set in `web/vercel.json`, because Vercel is the one serving the files.
+- **Active bookings limit:** a customer can have at most 3 active bookings (`CONFIRMED` and not finished). More return `409`. The user row is locked inside the booking transaction, so simultaneous requests can not go over the limit. The admin is not limited.
+
 ## Users and roles
 
 - Anyone can register from `/register`. New users always get the CUSTOMER role.
@@ -261,3 +311,14 @@ The response:
 | `401` | No session |
 | `404` | The car or the booking does not exist, or the booking belongs to another customer |
 | `409` | Overlapping dates, or cancelling a booking that is cancelled or already started |
+| `409` | Overlapping dates, the customer already has 3 active bookings, or cancelling a booking that is cancelled or already started |
+| `429` | Too many booking attempts |
+
+
+**Live demo:** https://car-rental-xi-teal-49.vercel.app
+
+Demo account (CUSTOMER role), to try bookings without registering:
+- Email: `demo@car-rental.com`
+- Password: `customerCar12343`
+
+> The backend runs on a free instance that sleeps after inactivity, so the first request can take up to a minute. After that it responds normally.

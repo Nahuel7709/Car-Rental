@@ -1023,3 +1023,111 @@ The secret signs the session tokens. The development secret is stored in local `
 
 ### Where AI helped
 I used Claude to explain Linux basics, Docker and Compose, to prepare the study PDFs and the Before coding answers, and to review each step. I wrote the Dockerfile, the `.dockerignore`, the Compose file and the seed changes, and debugged the build and the logs with its help.
+
+
+## Part 2: Deploy
+
+### Steps
+1. Created the database on Neon (Postgres 17, US East Ohio) and copied the direct connection string.
+2. Created a web service on Render from `backend/Dockerfile`, with the production environment variables and `/health` as the health check. The first deploy applied all the migrations.
+3. Checked `/health` and `/cars` on the Render URL, and seeded the production database from a local terminal pointing to Neon.
+4. Added `web/vercel.json` with the `/api` proxy and the SPA fallback.
+5. Created the Vercel project with `web` as root directory and `VITE_API_URL=/api`.
+6. Updated `CORS_ORIGIN` on Render with the Vercel URL.
+7. Tested the full flow in production: login and reload, booking, My bookings with reload, cancel, and the admin page.
+
+### Decisions
+- **Vercel, Render and Neon:** each one hosts what it is good at (static frontend, Docker container, managed Postgres), and all of them have a free tier and deploy from GitHub.
+- **Same region for the API and the database (Ohio):** every query travels between Render and Neon, so keeping them close keeps the queries fast.
+- **Postgres 17 on Neon instead of the default 18:** the same version as Docker and CI, so what passes the tests is what runs in production.
+- **Direct connection instead of the pooled one:** `prisma migrate deploy` does not work well through the pooler, and the app is small enough for a direct connection.
+- **A new `JWT_SECRET` for production:** never the same as the local one.
+- **Migrations on container start:** Render's pre-deploy command is only for paid plans, and the Dockerfile `CMD` already runs `migrate deploy` before starting the server.
+- **Seeds run once from my machine:** with the variables set only in that terminal, which I closed afterwards so nothing else runs against production by mistake. The admin has a strong password, and the demo user is public on purpose so anyone can try the app.
+- **`/api` proxy on Vercel instead of calling Render directly:** the session cookie stays first-party and `sameSite: "lax"` keeps working. Calling `onrender.com` from `vercel.app` would make it a third-party cookie, which browsers block.
+- **SPA fallback after the proxy rule:** rewrites are checked in order, and `/(.*)` matches everything, so it has to go last. Real files like the JS bundle are served before the rewrites are checked.
+- **GitHub access only to this repository:** Render and Vercel get write permissions, so they only have access to the repo they deploy.
+
+### Problems found
+- Neon offered Postgres 18 by default. Changed it to 17 before creating the project.
+- I ran the PowerShell syntax (`$env:NAME="value"`) in Git Bash, which returned "command not found". In bash it is `export NAME="value"`.
+
+### Where AI helped
+I used Claude to explain how the deploy works (the platforms, SSL, the reverse proxy, build-time vs runtime variables) and to guide me through the configuration of each platform, reviewing each screen before saving. I created the accounts, configured the services, wrote `vercel.json`, ran the seeds and tested the flows in production.
+
+
+# Task 13: Security basics
+
+## Before coding
+
+**1. Why should an oversized body return `413` and not `500`?**
+
+A `500` means the server failed, and nothing failed: the client sent a request that is too big. `413 Payload Too Large` is a client error (4xx) that tells the client exactly what went wrong. It also keeps the error logs clean: if every bot that sends a huge body produced a `500`, real server errors would get lost among false alarms. `express.json()` already rejects bodies over 100 KB by default, but the error handler only catches invalid JSON, so the `413` error reaches the final handler and becomes a `500`.
+
+**2. Where do the security headers of the API and of the frontend come from in this deploy, and what does React do by itself?**
+
+Headers are set by the server that sends the response. The API responses come from Express on Render, so its headers are added with `helmet`. The frontend is a set of static files served by Vercel, so its headers are configured in `web/vercel.json`. React runs in the browser after the HTML has already arrived, so it can not set headers. What React does by itself is escape everything rendered inside `{}` in JSX, which prevents most XSS: a name like `<script>` is shown as text and not executed. `dangerouslySetInnerHTML` skips that protection.
+
+**3. Why must `trust proxy` be a number and not `true`, and how will you find the right number?**
+
+The real client IP arrives in the `X-Forwarded-For` header, where each proxy adds the IP of whoever connected to it. Any client can send that header with fake values. With `true`, Express takes the leftmost IP, which is the one the attacker controls, so they can change it on every request and never reach the rate limit. With a number, Express reads the header from the right, skips the proxies I trust, and the remaining IP is the real client. To find the number, I will add a temporary endpoint that returns `req.ip` and `X-Forwarded-For`, call it from the production app, adjust the value until `req.ip` shows my real IP, and then remove the endpoint.
+
+**4. Why is the login limited per IP but `POST /bookings` per user?**
+
+On the login the user is not authenticated yet, so the IP is the only thing that identifies the client. `POST /bookings` requires a session, so the user ID is available, and it is a better key. Many mobile carriers in Argentina put thousands of customers behind the same public IP (CGNAT), and the same happens in a university or an office, so limiting per IP would block innocent users. Also, it is harder for an attacker to create many accounts than to change IPs.
+
+**5. Why does rate limiting not stop someone from booking every car, and how does the active bookings limit stay correct with simultaneous requests?**
+
+Rate limiting only controls speed. Someone can book one car every few minutes, never reach the limit, and end up with every car booked. Each booking is valid by itself, so the problem is a business rule: a customer can have at most 3 active bookings. The check has the same race condition as the overlap: two simultaneous requests could both count 2 bookings and both create one. Locking the car does not help, because they can be different cars. Inside the transaction I will lock the user row with `SELECT ... FOR UPDATE` before counting, so the second request waits until the first one finishes and then counts 3. The user is always locked before the car, in every request, to avoid deadlocks.
+
+**6. The test suite logs in many times from the same IP. How will the rate limiters affect the tests, and how will you handle it?**
+
+All the tests run from the same local IP, so after a few logins the login limiter would start returning `429` and break tests that have nothing to do with rate limiting. I do not want to disable the limiters in tests, because then the tests would not check the real behavior. The counters are stored in a memory store, so I will reset them before each test. That way every test starts from zero, the limits are the same as in production, and I can write a test that reaches the limit and expects `429`.
+
+**7. The limiters keep their counters in memory. Why is that fine for now, and why not in the long term?**
+
+The API runs as a single instance, so one memory store sees every request. But the counters are lost when the container restarts, which happens often on Render's free plan, so an attacker gets a fresh start. If the API ran on several instances, each one would count separately and the real limit would be multiplied by the number of instances. The standard solution is a shared and fast store like Redis, which is the next task.
+
+
+## Process
+
+### Steps
+1. Limited JSON bodies to 10 KB and returned `413` instead of `500` for bigger bodies.
+2. Added `helmet` as the first middleware.
+3. Read `TRUST_PROXY` from the environment, failing on start if it is not a non-negative integer.
+4. Added a temporary `/debug/ip` endpoint, deployed the branch to Render and measured the proxy chain. Set `TRUST_PROXY=4`, tested spoofing, and removed the endpoint.
+5. Added rate limiters for login, register, bookings and the whole API, and reset their counters before each test.
+6. Added the active bookings limit inside the booking transaction, locking the user row before the car row.
+7. Added `X-Frame-Options`, `X-Content-Type-Options` and `Referrer-Policy` in `web/vercel.json`.
+8. Showed clear messages in the frontend for `429` and for the active bookings limit.
+
+### Decisions
+- **`413` handled next to the invalid JSON handler:** errors only reach the error handlers registered after the middleware that throws them, so it goes right after `express.json()`.
+- **helmet first:** some middlewares answer by themselves (CORS preflight, `413`, `429`). Running helmet before all of them adds the headers to every response, errors included.
+- **`TRUST_PROXY` as an environment variable:** the number of proxies depends on the infrastructure, not on the code. Locally and in tests there are none, so it stays empty.
+- **Measured, not guessed:** the chain had four proxies (Vercel, Cloudflare, Render's load balancer and a local proxy inside the container), one more than I expected. The local proxy only showed up because `req.ip` was `::1`.
+- **IP-only limits for login, after finding the spoofing:** I considered adding a per-account login limiter, which can not be bypassed by changing IPs, and discarded it because anyone could lock a user out on purpose with a few failed attempts. I kept the IP limits and documented the limitation.
+- **Successful logins do not count:** people behind the same IP (an office, a university) can log in without consuming attempts. Only failures count, which is what a brute force attack produces.
+- **Bookings limited per user:** the user is known on that route, and limiting per IP would punish users behind CGNAT.
+- **Global limiter after `/health`:** Render calls it every few seconds. If it counted, Render would get `429`, think the service is down and restart it.
+- **Counters reset before each test, not limiters disabled:** the tests run with the same limits as production, and the rate limit itself can be tested.
+- **User row locked before the car row:** the car lock does not help when the two requests are for different cars. Always locking in the same order avoids deadlocks.
+- **Active = `CONFIRMED` and `endDate` today or later:** a booking that ends today still counts, because the car is returned that day.
+- **Error messages decided in one place in the frontend:** the forms already show `err.message`, so a single `errorFromResponse` function in the API layer handles `429`, the API messages, and bodies that are not JSON.
+
+### Problems found
+- The `413` error reached the final error handler and returned `500`, because the first handler only caught `SyntaxError`.
+- The `TRUST_PROXY` check was inverted at first: it threw an error for valid values. Then it was missing a `!` before `Number.isInteger`.
+- The tests stopped with "Tests must run against the test database". The terminal still had `DATABASE_URL` exported from seeding production, and dotenv does not override existing variables, so the tests were about to run against Neon. The check in `setup.ts` stopped them before any `deleteMany`. Opening a new terminal fixed it.
+- The first deploy of the branch did not include the debug endpoint, because that commit had not been pushed.
+- Spoofing `X-Forwarded-For` worked through Vercel, which forwarded the header sent by the client instead of the real IP, and also by calling Render directly, where there is one proxy less. This changed my Before coding answer about `trust proxy`: a number is necessary, but in this setup it is not enough.
+- In the booking controller, `transactionResult.error` did not compile, because the result can also be a booking. It needed the `"error" in transactionResult` check first. One branch was also missing a `return` after sending the `409`.
+- In the frontend, every `409` showed "This car is not available for those dates", which would be wrong for the active bookings limit.
+- Locally, the frontend can not read `Retry-After`, because the API is on another origin and CORS hides that header. In production it works because of the Vercel proxy, and locally the message falls back to "wait a few minutes".
+
+### Tests
+- `security.test.ts`: `413` for a body over 10 KB; helmet headers and no `X-Powered-By`; `429` with `Retry-After` after 10 failed logins; successful logins not counted; `429` after 5 registrations; the bookings limit applied per user and not per IP.
+- `bookings.test.ts`: `409` on the 4th active booking; cancelled and finished bookings not counted; the admin not limited; two simultaneous requests for different cars with 2 active bookings: one `201`, one `409`, and 3 bookings saved.
+
+### Where AI helped
+I used Claude to explain the security concepts, prepare the study PDF and the Before coding answers, and guide me through each step. I wrote the body limit and the `413` handler, the `TRUST_PROXY` configuration and the debug endpoint, measured the proxy chain in production, wrote the active bookings limit in the controller with its guidance, and added the headers in `vercel.json`. Claude wrote the rate limiters, the tests, and the frontend error messages, and explained each part to me.

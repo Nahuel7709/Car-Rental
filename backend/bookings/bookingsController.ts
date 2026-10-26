@@ -5,6 +5,8 @@ import { toApiBooking } from "./mappers/booking.ts";
 import type { Role } from "../generated/prisma/enums.ts";
 import z from "zod";
 
+const MAX_ACTIVE_BOOKINGS = 3;
+
 const bookingWithCarInclude = {
   car: { select: { id: true, brand: true, model: true, imageUrl: true } },
 } as const;
@@ -64,6 +66,22 @@ export async function createBooking(req: Request, res: Response) {
 
   //transaction
   const transactionResult = await prisma.$transaction(async (tx) => {
+    if (user.role !== "ADMIN") {
+      await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${user.id}::uuid FOR UPDATE`;
+
+      const activeBookings = await tx.booking.count({
+        where: {
+          userId: user.id,
+          status: "CONFIRMED",
+          endDate: { gte: new Date(todayInBuenosAires()) },
+        },
+      });
+
+      if (activeBookings >= MAX_ACTIVE_BOOKINGS) {
+        return { error: "LIMIT" as const };
+      }
+    }
+
     //block rows with sql
     await tx.$queryRaw`SELECT id FROM "Car" WHERE id = ${data.carId}::uuid FOR UPDATE`;
 
@@ -78,7 +96,7 @@ export async function createBooking(req: Request, res: Response) {
     });
 
     if (isBooked !== null) {
-      return { error: 409 as const };
+      return { error: "OVERLAP" as const };
     }
 
     const booking = await tx.booking.create({
@@ -96,9 +114,17 @@ export async function createBooking(req: Request, res: Response) {
   });
 
   if ("error" in transactionResult) {
+    if (transactionResult.error === "LIMIT") {
+      res.status(409).json({
+        message: `You can have at most ${MAX_ACTIVE_BOOKINGS} active bookings`,
+      });
+      return;
+    }
+
     res.status(409).json({ message: "Car already booked" });
     return;
   }
+
   res.status(201).json(toApiBooking(transactionResult));
 }
 

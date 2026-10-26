@@ -1,4 +1,5 @@
 import { Booking } from "../interfaces/Booking";
+import { errorFromResponse } from "./errors";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -14,13 +15,14 @@ export async function createBooking(
     body: JSON.stringify({ carId, startDate, endDate }),
   });
 
-  if (res.status === 409) {
-    throw new Error("This car is not available for those dates");
-  }
-
   if (!res.ok) {
-    const data = await res.json();
-    throw new Error(data.message);
+    const error = await errorFromResponse(res);
+    // 409 has two causes: the dates overlap, or the active bookings limit.
+    // The overlap gets a friendlier text; the limit message comes from the API.
+    if (res.status === 409 && error.message === "Car already booked") {
+      throw new Error("This car is not available for those dates");
+    }
+    throw error;
   }
 
   const data = await res.json();
