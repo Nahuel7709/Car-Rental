@@ -6,10 +6,13 @@ import { carsRouter } from "./cars/carsRouter.ts";
 import { authRouter } from "./auth/authRouter.ts";
 import cookieParser from "cookie-parser";
 import { bookingRouter } from "./bookings/bookingsRouter.ts";
+import helmet from "helmet";
 
 export const app = express();
 
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:5173";
+
+app.use(helmet());
 
 app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
 
