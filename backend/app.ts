@@ -56,11 +56,6 @@ app.get("/health", (_req: Request, res: Response) => {
   res.status(200).json({ status: "ok" });
 });
 
-app.get("/debug/ip", (req: Request, res: Response) => {
-  const ip = req.ip;
-  const forwardedFor = req.headers["x-forwarded-for"];
-  res.status(200).json({ ip, forwardedFor });
-});
 
 app.use(cookieParser());
 
