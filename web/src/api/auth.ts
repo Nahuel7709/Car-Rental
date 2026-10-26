@@ -1,4 +1,5 @@
 import { User } from "../interfaces/User";
+import { errorFromResponse } from "./errors";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -29,8 +30,7 @@ export async function loginRequest(
     body: JSON.stringify({ email, password }),
   });
   if (!res.ok) {
-    const data = await res.json();
-    throw new Error(data.message);
+    throw await errorFromResponse(res);
   }
   const user = await res.json();
   return user;
@@ -47,8 +47,7 @@ export async function registerRequest(
     body: JSON.stringify({ name, email, password }),
   });
   if (!res.ok) {
-    const data = await res.json();
-    throw new Error(data.message);
+    throw await errorFromResponse(res);
   }
 }
 
