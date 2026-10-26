@@ -7,6 +7,7 @@ import { authRouter } from "./auth/authRouter.ts";
 import cookieParser from "cookie-parser";
 import { bookingRouter } from "./bookings/bookingsRouter.ts";
 import helmet from "helmet";
+import { globalLimiter } from "./middlewares/rateLimiters.ts";
 
 export const app = express();
 
@@ -56,6 +57,9 @@ app.get("/health", (_req: Request, res: Response) => {
   res.status(200).json({ status: "ok" });
 });
 
+
+// After /health on purpose: Render calls it constantly to check the service.
+app.use(globalLimiter);
 
 app.use(cookieParser());
 
