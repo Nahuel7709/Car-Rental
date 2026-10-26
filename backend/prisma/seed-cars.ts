@@ -1,7 +1,12 @@
 import { prisma } from "../db/prisma.ts";
 
 async function seedCars() {
-  await prisma.$executeRawUnsafe('TRUNCATE "Car" RESTART IDENTITY;');
+  const cars = await prisma.car.count();
+
+  if (cars > 0) {
+    console.log("Cars already seeded, skipping");
+    return;
+  }
 
   const result = await prisma.car.createMany({
     data: [
@@ -204,7 +209,6 @@ async function seedCars() {
   });
 
   console.log(`Seed completed: ${result.count} cars created`);
-
 }
 
 seedCars()
@@ -216,5 +220,3 @@ seedCars()
     await prisma.$disconnect();
     process.exit(1);
   });
-
-
