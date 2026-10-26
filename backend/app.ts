@@ -10,6 +10,16 @@ import helmet from "helmet";
 
 export const app = express();
 
+const proxy = process.env.TRUST_PROXY;
+
+if (proxy) {
+  const nProxy = Number(proxy);
+  if (nProxy < 0 || !Number.isInteger(nProxy)) {
+    throw new Error("TRUST_PROXY must be a non-negative integer");
+  }
+  app.set("trust proxy", nProxy);
+}
+
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:5173";
 
 app.use(helmet());
@@ -44,6 +54,12 @@ app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
 
 app.get("/health", (_req: Request, res: Response) => {
   res.status(200).json({ status: "ok" });
+});
+
+app.get("/debug/ip", (req: Request, res: Response) => {
+  const ip = req.ip;
+  const forwardedFor = req.headers["x-forwarded-for"];
+  res.status(200).json({ ip, forwardedFor });
 });
 
 app.use(cookieParser());
