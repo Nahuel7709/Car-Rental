@@ -988,3 +988,38 @@ With the front on `vercel.app` and the back on `onrender.com`, they are differen
 **6. Why must the production `JWT_SECRET` be different from the one used in development?**
 
 The secret signs the session tokens. The development secret is stored in local `.env` files, it may be shared or weak, and it is less protected. If production used the same one, anyone who knows it could sign a valid token for any user, including an admin. Each environment needs its own secret, and the production one must be long, random and only stored in the hosting panel.
+
+
+## Part 1: Docker
+
+### Steps
+1. Added a `GET /health` endpoint, without authentication, and a test for it.
+2. Wrote `backend/Dockerfile` and `backend/.dockerignore`.
+3. Built the image and checked the layer cache: a second build reused every layer.
+4. Wrote `docker-compose.yml` with a `db` service (Postgres 17, volume and healthcheck) and an `api` service built from the Dockerfile.
+5. Ran the seeds inside the container with `docker compose exec`, and made the cars seed idempotent.
+6. Tested the full flow with the API in Docker and the frontend with Vite.
+
+### Decisions
+- **`node:24-alpine` as base image:** the same Node version as CI and local, on a small Linux image.
+- **Dependency files copied before the code:** the `npm ci` layer is reused when only the code changes, so rebuilds take seconds.
+- **Prisma client generated and TypeScript compiled inside the image:** `generated/` and `dist/` are in `.dockerignore`, so the image builds them for Linux.
+- **Migrations on start, not on build:** the container runs `npx prisma migrate deploy && node dist/index.js` through `sh -c`, because `&&` is a shell feature. The server only starts if the migrations succeed, and each environment migrates its own database.
+- **No secrets in the image:** `.env*` is in `.dockerignore`. Compose passes the variables when the container starts. The values in `docker-compose.yml` are only for local use, and the `JWT_SECRET` says so.
+- **`db:5432` instead of `localhost`:** inside a container, `localhost` is the container itself. Compose puts both services in the same network, where they find each other by service name.
+- **Healthcheck with a short interval and `depends_on: service_healthy`:** the API waits until Postgres accepts connections, without waiting the default 30 seconds.
+- **Named volume for the database:** the data survives `docker compose down`. `down -v` is the explicit way to reset.
+- **Idempotent cars seed:** it skips if there are cars already instead of emptying the table. A seed that deletes data first could wipe real bookings if it is run again in production.
+
+### Problems found
+- `docker build` failed with "no such file or directory" because it ran from the repo root. The `.` is the build context, and the Dockerfile is in `backend/`.
+- `COPY package* .json` had an extra space, so Docker read two paths instead of one.
+- The first `CMD` ran `node index.js`, which does not exist: the compiled code is in `dist/`, and the migrations were missing.
+- `ports: -5435:5432` was written in the same line, which is not a YAML list.
+- The admin email had an underscore in the domain, which would fail the seed validation.
+- Without `interval`, the healthcheck runs every 30 seconds, so the API could wait much longer than needed.
+- `pg_isready` without `-U` connects as `root`, and Postgres logged `role "root" does not exist` every few seconds. Fixed with `-U postgres`.
+- The cars seed used `TRUNCATE "Car"`, which Postgres rejects now that `Booking` has a foreign key to `Car`. Replaced it with a check that skips the seed when there are cars, and fixed the condition (it first used `!== 1`, which skipped an empty database).
+
+### Where AI helped
+I used Claude to explain Linux basics, Docker and Compose, to prepare the study PDFs and the Before coding answers, and to review each step. I wrote the Dockerfile, the `.dockerignore`, the Compose file and the seed changes, and debugged the build and the logs with its help.
